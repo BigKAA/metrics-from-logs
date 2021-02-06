@@ -31,7 +31,7 @@ func NewInstance() *Instance {
 	var configFileName string
 	showVersion := false
 
-	flag.StringVar(&configFileName, "c", "etc/mfl/conf.yaml", "Config file")
+	flag.StringVar(&configFileName, "c", "conf.yaml", "Config file")
 	flag.BoolVar(&showVersion, "v", false, "Show version")
 	flag.Parse()
 
