@@ -1,0 +1,3 @@
+main:
+  confd: "etc\\mfl\\conf.d"
+  loglevel: "debug"
