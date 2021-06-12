@@ -83,7 +83,7 @@ func NewInstance() *Instance {
 		return nil
 	}
 
-	metrics, err := FillMetrics(config.Main.Confd)
+	metrics, err := FillMetrics(config.Main.Confd, logs)
 	if err != nil || metrics == nil {
 		logs.Error("Неудалось сформировать массив метрик.")
 		return nil
@@ -101,7 +101,7 @@ func NewInstance() *Instance {
 }
 
 // FillMetrics Заполняем структуру информацией о метриках
-func FillMetrics(dirPath string) ([]Metric, error) {
+func FillMetrics(dirPath string, logs *logrus.Logger) ([]Metric, error) {
 	files, _ := filepath.Glob(dirPath + "*.yaml")
 	var ret []Metric
 	for _, fileName := range files {
@@ -114,9 +114,27 @@ func FillMetrics(dirPath string) ([]Metric, error) {
 		if err != nil {
 			return nil, err
 		}
+		if IsMetricExist(metric, ret) {
+			logs.Error("Не уникальная реплика " + metric.Mertic + " в файле " + fileName)
+			continue
+		}
 		ret = append(ret, metric)
 	}
 	return ret, nil
+}
+
+// IsMetricExist проверяет, есть ли метрика с таким именем в массиве
+func IsMetricExist(metric Metric, metrics []Metric) bool {
+	// Если массив пустой, то и метрика уникальная
+	if len(metrics) == 0 {
+		return false
+	}
+	for _, m := range metrics {
+		if m.Mertic == metric.Mertic {
+			return true
+		}
+	}
+	return false
 }
 
 // ReadConfigFile Читаем конфигурацию из конфигурационного файла и формируем
