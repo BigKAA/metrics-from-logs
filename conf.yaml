@@ -1,4 +1,0 @@
-main:
-  confd: "etc\\mfl\\conf.d\\"
-  loglevel: "debug"
-  bindaddr: "127.0.0.1:8080"

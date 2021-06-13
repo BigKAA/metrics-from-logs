@@ -71,20 +71,24 @@ func NewInstance() *Instance {
 	}
 	logs.SetLevel(level)
 
+	// Проверяем наличие директории с конф файлами метрик
 	ret, err := exists(config.Confd)
 	if !ret || err != nil {
 		logs.Error("Директория " + config.Confd + " не существует.")
 		return nil
 	}
 
+	// Читаем метрики из конфигурационных файлов
 	metrics, err := FillMetrics(config.Confd, logs)
 	if err != nil || metrics == nil {
 		logs.Error("Неудалось сформировать массив метрик.")
 		return nil
 	}
 
-	for _, m := range metrics {
-		logs.Debug("{ Метрика: " + m.Mertic + ", запрос: " + m.Query + ", периодичность: " + strconv.Itoa(m.Repeat) + "}")
+	if config.Loglevel == "debug" {
+		for _, m := range metrics {
+			logs.Debug("{ Метрика: " + m.Mertic + ", запрос: " + m.Query + ", периодичность: " + strconv.Itoa(m.Repeat) + "}")
+		}
 	}
 
 	instance := &Instance{
