@@ -39,4 +39,5 @@ query: |
         the,
         query
     }
+repeat: 60 # количество секунд
 ```

@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strconv"
 
 	"github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v3"
@@ -24,6 +25,7 @@ type Metric struct {
 	Espasswordfrom string `yaml:"espasswordfrom"` // одно из трёх значений: conf, file, env
 	Espassword     string `yaml:"espassword"`     // пароль
 	Query          string `yaml:"query"`          // Запрос к es
+	Repeat         int    `yaml:"repeat"`         // Количество секунд, через сколько повторять запрос
 }
 
 // Config параметеры из конфигурационного файла программы.
@@ -90,7 +92,7 @@ func NewInstance() *Instance {
 	}
 
 	for _, m := range metrics {
-		logs.Debug("Метрика: " + m.Query)
+		logs.Debug("{ Метрика: " + m.Mertic + ", запрос: " + m.Query + ", периодичность: " + strconv.Itoa(m.Repeat) + "}")
 	}
 
 	return &Instance{
