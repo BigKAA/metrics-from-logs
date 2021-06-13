@@ -16,16 +16,14 @@ import (
 const VERSION = "0.01"
 
 type Metric struct {
-	Mertic         string `yaml:"metric"`         // Название метрики. Должно быть уникальным.
-	Metrictype     string `yaml:"metrictype"`     // Тип метрики: counter, gauge, histogram, summary
-	Esserver       string `yaml:"esserver"`       // es.any.com
-	Esserverport   int    `yaml:"esserverport"`   // es port
-	Esuserfrom     string `yaml:"esuserfrom"`     // одно из трёх значений: conf, file, env
-	Esuser         string `yaml:"esuser"`         // Пользователь
-	Espasswordfrom string `yaml:"espasswordfrom"` // одно из трёх значений: conf, file, env
-	Espassword     string `yaml:"espassword"`     // пароль
-	Query          string `yaml:"query"`          // Запрос к es
-	Repeat         int    `yaml:"repeat"`         // Количество секунд, через сколько повторять запрос
+	Mertic       string `yaml:"metric"`       // Название метрики. Должно быть уникальным.
+	Metrictype   string `yaml:"metrictype"`   // Тип метрики: counter, gauge, histogram, summary
+	Esserver     string `yaml:"esserver"`     // es.any.com
+	Esserverport int    `yaml:"esserverport"` // es port
+	Esuser       string `yaml:"esuser"`       // Пользователь
+	Espassword   string `yaml:"espassword"`   // пароль
+	Query        string `yaml:"query"`        // Запрос к es
+	Repeat       int    `yaml:"repeat"`       // Количество секунд, через сколько повторять запрос
 }
 
 // Config параметеры из конфигурационного файла программы.

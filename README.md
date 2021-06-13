@@ -30,9 +30,7 @@ metric: MetricName
 metrictype: counter # gauge, histogram, summary
 esserver: es.any.com
 esserverport: 12345
-esuserfrom: conf # file, env
 esuser: user
-espasswordfrom: conf # file, env
 espassword: password
 query: |
     { 
