@@ -1,6 +1,11 @@
 package main
 
-import "github.com/BigKAA/metrics-from-logs/app/instance"
+import (
+	"log"
+
+	"github.com/BigKAA/metrics-from-logs/app/instance"
+	"github.com/joho/godotenv"
+)
 
 func main() {
 	var inst *instance.Instance
@@ -9,4 +14,11 @@ func main() {
 		return
 	}
 	inst.Start()
+}
+
+func init() {
+	// loads values from .env into the system
+	if err := godotenv.Load(); err != nil {
+		log.Print("No .env file found")
+	}
 }

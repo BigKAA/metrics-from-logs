@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strconv"
 
+	"github.com/gorilla/mux"
 	"github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v3"
 )
@@ -28,10 +29,9 @@ type Metric struct {
 
 // Config параметеры из конфигурационного файла программы.
 type Config struct {
-	Main struct {
-		Confd    string `yaml:"confd"` // Директория с конфигурационными файлами с запросами к es
-		Loglevel string `yaml:"loglevel"`
-	} `yaml:"main"`
+	Confd    string // Директория с конфигурационными файлами с запросами к es
+	Loglevel string
+	Bindaddr string
 }
 
 // Instance ...
@@ -39,14 +39,13 @@ type Instance struct {
 	logs    *logrus.Logger
 	config  *Config
 	metrics []Metric
+	router  *mux.Router
 }
 
 // NewInstance Создаёт приложение
 func NewInstance() *Instance {
-	var configFileName string
 	showVersion := false
 
-	flag.StringVar(&configFileName, "c", "conf.yaml", "Config file")
 	flag.BoolVar(&showVersion, "v", false, "Show version")
 	flag.Parse()
 
@@ -55,35 +54,30 @@ func NewInstance() *Instance {
 		return nil
 	}
 
-	// Читаем основной конфигурационный файл.
-	config, err := ReadConfigFile(configFileName)
-	if err != nil {
-		fmt.Print("Не могу загрузить информацию из конфигурационного файла. ", err)
-	}
-
 	logs := logrus.New()
 	logs.SetFormatter(&logrus.JSONFormatter{})
 
+	config := &Config{
+		Confd:    getEnv("MFL_CONF_DIR", "etc\\mfl\\conf.d\\"),
+		Loglevel: getEnv("MFL_LOG_LEVEL", "debug"),
+		Bindaddr: getEnv("MFL_BIND_ADDR", "127.0.0.1:8080"),
+	}
+
 	// Устанавливаем уровень важности сообщений, выводимых logrus
-	level, err := logrus.ParseLevel(config.Main.Loglevel)
+	level, err := logrus.ParseLevel(config.Loglevel)
 	if err != nil {
 		logs.Warn("Не правильно определён loglevel в конфигурационном файле. Установлен уровень по умолчанию debug.")
 		level, _ = logrus.ParseLevel("debug")
 	}
 	logs.SetLevel(level)
 
-	// Проверяем наличие конфигурационной директории
-	if config.Main.Confd == "" {
-		logs.Error("Не определена директория для файлов с описанием Метрик.")
-		return nil
-	}
-	ret, err := exists(config.Main.Confd)
+	ret, err := exists(config.Confd)
 	if !ret || err != nil {
-		logs.Error("Директория " + config.Main.Confd + " не существует.")
+		logs.Error("Директория " + config.Confd + " не существует.")
 		return nil
 	}
 
-	metrics, err := FillMetrics(config.Main.Confd, logs)
+	metrics, err := FillMetrics(config.Confd, logs)
 	if err != nil || metrics == nil {
 		logs.Error("Неудалось сформировать массив метрик.")
 		return nil
@@ -93,11 +87,14 @@ func NewInstance() *Instance {
 		logs.Debug("{ Метрика: " + m.Mertic + ", запрос: " + m.Query + ", периодичность: " + strconv.Itoa(m.Repeat) + "}")
 	}
 
-	return &Instance{
+	instance := &Instance{
 		logs:    logs,
 		config:  config,
 		metrics: metrics,
+		router:  mux.NewRouter(),
 	}
+
+	return instance
 }
 
 // FillMetrics Заполняем структуру информацией о метриках
@@ -137,24 +134,6 @@ func IsMetricExist(metric Metric, metrics []Metric) bool {
 	return false
 }
 
-// ReadConfigFile Читаем конфигурацию из конфигурационного файла и формируем
-// структуру Conf
-func ReadConfigFile(fileName string) (*Config, error) {
-	// Чтение конфигурационного файла
-	confFile, err := ioutil.ReadFile(fileName)
-	if err != nil {
-		return nil, err
-	}
-
-	var conf Config
-	err = yaml.Unmarshal(confFile, &conf)
-	if err != nil {
-		return nil, err
-	}
-
-	return &conf, nil
-}
-
 // exists returns whether the given file or directory exists
 func exists(path string) (bool, error) {
 	_, err := os.Stat(path)
@@ -165,4 +144,13 @@ func exists(path string) (bool, error) {
 		return false, nil
 	}
 	return false, err
+}
+
+// Simple helper function to read an environment or return a default value
+func getEnv(key string, defaultVal string) string {
+	if value, exists := os.LookupEnv(key); exists {
+		return value
+	}
+
+	return defaultVal
 }
