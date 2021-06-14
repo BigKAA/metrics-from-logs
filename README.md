@@ -41,3 +41,9 @@ query: |
     }
 repeat: 60 # количество секунд
 ```
+
+# Сборка
+
+Все, что нужно для сборки уже есть в Dockerfile
+
+    docker build -t metricsfromlogs:0.01 "."
