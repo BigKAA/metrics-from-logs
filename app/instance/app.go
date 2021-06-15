@@ -25,9 +25,9 @@ func (i *Instance) Start() error {
 
 // ConfigRouter конфигурирует роутер
 func (i *Instance) ConfigRouter() {
-	i.router.HandleFunc("/", i.HandlerRoot())
-	// pods := s.router.PathPrefix("/pods").Subrouter()
-	// pods.HandleFunc("/", s.HandlerRoot())
+	// i.router.HandleFunc("/", i.HandlerRoot())
+	pods := i.router.PathPrefix(i.config.Context).Subrouter()
+	pods.HandleFunc("/", i.HandlerRoot())
 	// pods.HandleFunc("/{ns}", s.HandlerPods())
 }
 
