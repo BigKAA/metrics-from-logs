@@ -1,3 +1,4 @@
+// cSpell:disable
 package instance
 
 import (
@@ -17,21 +18,21 @@ import (
 const VERSION = "0.01"
 
 type Metric struct {
-	Mertic       string `yaml:"metric"`       // Название метрики. Должно быть уникальным.
-	Metrictype   string `yaml:"metrictype"`   // Тип метрики: counter, gauge, histogram, summary
-	Esserver     string `yaml:"esserver"`     // es.any.com
-	Esserverport int    `yaml:"esserverport"` // es port
-	Esuser       string `yaml:"esuser"`       // Пользователь
-	Espassword   string `yaml:"espassword"`   // пароль
-	Query        string `yaml:"query"`        // Запрос к es
-	Repeat       int    `yaml:"repeat"`       // Количество секунд, через сколько повторять запрос
+	Mertic     string `yaml:"metric"`     // Название метрики. Должно быть уникальным.
+	Metrictype string `yaml:"metrictype"` // Тип метрики: counter, gauge, histogram, summary
+	Query      string `yaml:"query"`      // Запрос к es
+	Repeat     int    `yaml:"repeat"`     // Количество секунд, через сколько повторять запрос
 }
 
 // Config параметеры из конфигурационного файла программы.
 type Config struct {
-	Confd    string // Директория с конфигурационными файлами с запросами к es
-	Loglevel string
-	Bindaddr string
+	Confd      string // Директория с конфигурационными файлами с запросами к es
+	Loglevel   string
+	Bindaddr   string
+	Context    string
+	EsHost     string
+	EsUser     string
+	EsPassword string
 }
 
 // Instance ...
@@ -58,9 +59,13 @@ func NewInstance() *Instance {
 	logs.SetFormatter(&logrus.JSONFormatter{})
 
 	config := &Config{
-		Confd:    getEnv("MFL_CONF_DIR", "etc\\mfl\\conf.d\\"),
-		Loglevel: getEnv("MFL_LOG_LEVEL", "debug"),
-		Bindaddr: getEnv("MFL_BIND_ADDR", "127.0.0.1:8080"),
+		Confd:      getEnv("MFL_CONF_DIR", "etc\\mfl\\conf.d\\"),
+		Loglevel:   getEnv("MFL_LOG_LEVEL", "debug"),
+		Bindaddr:   getEnv("MFL_BIND_ADDR", "127.0.0.1:8080"),
+		Context:    getEnv("MFL_CONTEXT", "/"),
+		EsHost:     getEnv("MFL_ES_HOST", "127.0.0.1:9500"),
+		EsUser:     getEnv("MFL_ES_USER", "user"),
+		EsPassword: getEnv("MFL_ES_PASSWORD", "password"),
 	}
 
 	// Устанавливаем уровень важности сообщений, выводимых logrus

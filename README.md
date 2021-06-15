@@ -20,6 +20,10 @@
 MFL_CONF_DIR=etc\\mfl\\conf.d\\
 MFL_LOG_LEVEL=debug
 MFL_BIND_ADDR=127.0.0.1:8080
+MFL_CONTEXT=/
+MFL_ES_HOST=127.0.0.1:9500
+MFL_ES_USER=user
+MFL_ES_PASSWORD=password
 ```
 
 ## Конфигурационные файлы сбора метрик
@@ -30,10 +34,6 @@ MFL_BIND_ADDR=127.0.0.1:8080
 ```yaml
 metric: MetricName
 metrictype: counter # gauge, histogram, summary
-esserver: es.any.com
-esserverport: 12345
-esuser: user
-espassword: password
 query: |
     { 
         the,
@@ -47,3 +47,12 @@ repeat: 60 # количество секунд
 Все, что нужно для сборки уже есть в Dockerfile
 
     docker build -t metricsfromlogs:0.01 "."
+
+# Запуск приложения
+
+## Docker
+
+В Windows:
+
+    docker run -it --rm --name mfl --env-file .env -p 8080:8080 -v C:\Users\artur\metrics-from-logs\etc\mfl\conf.d:/etc/mfl/conf.d metricsfromlogs:0.01
+    curl http://host.docker.internal:8080
