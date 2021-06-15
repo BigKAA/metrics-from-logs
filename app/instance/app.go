@@ -11,6 +11,11 @@ import (
 
 // Start start app
 func (i *Instance) Start() error {
+	err := i.CreateThreads()
+	if err != nil {
+		i.logs.Error(err)
+		return err
+	}
 	i.ConfigRouter()
 	i.logs.Info("Starting API server Listen on: http://", i.config.Bindaddr)
 

@@ -22,6 +22,7 @@ type Metric struct {
 	Metrictype string `yaml:"metrictype"` // Тип метрики: counter, gauge, histogram, summary
 	Query      string `yaml:"query"`      // Запрос к es
 	Repeat     int    `yaml:"repeat"`     // Количество секунд, через сколько повторять запрос
+	Delay      int    `yaml:"delay"`      // Количество секунд, задержка после старта программы перед началом цикла опроса.
 }
 
 // Config параметеры из конфигурационного файла программы.
