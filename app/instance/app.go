@@ -32,7 +32,7 @@ func (i *Instance) Start() error {
 // ConfigRouter конфигурирует роутер
 func (i *Instance) ConfigRouter() {
 	// i.router.HandleFunc("/", i.HandlerRoot())
-	if i.config.Context == "/" {
+	if i.config.Context == "/" || i.config.Context == "" {
 		i.router.Path("/prometheus/metrics").Handler(promhttp.Handler())
 	} else {
 		i.router.Path(i.config.Context + "/prometheus/metrics").Handler(promhttp.Handler())
