@@ -37,6 +37,7 @@ MFL_ES_PASSWORD=password
 
 ```yaml
 metric: MetricName
+metrichelp: "Небольшое описание метрики. В одну строку."
 metrictype: counter # gauge, histogram, summary
 query: |
     { 

@@ -18,7 +18,8 @@ import (
 const VERSION = "0.01"
 
 type Metric struct {
-	Mertic     string `yaml:"metric"`     // Название метрики. Должно быть уникальным.
+	Mertic     string `yaml:"metric"` // Название метрики. Должно быть уникальным.
+	Mertichelp string `yaml:"metrichelp"`
 	Metrictype string `yaml:"metrictype"` // Тип метрики: counter, gauge, histogram, summary
 	Query      string `yaml:"query"`      // Запрос к es
 	Repeat     int    `yaml:"repeat"`     // Количество секунд, через сколько повторять запрос
