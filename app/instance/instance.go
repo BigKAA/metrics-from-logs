@@ -38,6 +38,7 @@ type Config struct {
 	EsPassword   string
 	K8sPod       string
 	K8sNamespace string
+	isK8sRun     bool
 }
 
 // Instance ...

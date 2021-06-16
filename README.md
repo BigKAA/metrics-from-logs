@@ -18,6 +18,8 @@
 * MFL_K8S_POD - под k8s. Подставляется как label метрики.
 * MFL_K8S_NAMESPACE - namespace k8s. Подставляется как label метрики.
 
+Если приложение запускается не в k8s, переменные MFL_K8S_POD и MFL_K8S_NAMESPACE определять не надо.
+
 Во время отладки приложения, вместо переменных среды окружения можно использовать файл .env с
 помещенными в него переменными и их значениями.
 
@@ -28,7 +30,8 @@ MFL_CONF_DIR=etc\\mfl\\conf.d\\
 MFL_LOG_LEVEL=debug
 MFL_BIND_ADDR=127.0.0.1:8080
 MFL_CONTEXT=/
-MFL_ES_HOST=127.0.0.1:9500
+MFL_ES_HOST=127.0.0.1
+MFL_ES_PORT=9200
 MFL_ES_USER=user
 MFL_ES_PASSWORD=password
 ```
