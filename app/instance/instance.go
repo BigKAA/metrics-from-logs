@@ -28,13 +28,16 @@ type Metric struct {
 
 // Config параметеры из конфигурационного файла программы.
 type Config struct {
-	Confd      string // Директория с конфигурационными файлами с запросами к es
-	Loglevel   string
-	Bindaddr   string
-	Context    string
-	EsHost     string
-	EsUser     string
-	EsPassword string
+	Confd        string // Директория с конфигурационными файлами с запросами к es
+	Loglevel     string
+	Bindaddr     string
+	Context      string
+	EsHost       string
+	EsPort       string
+	EsUser       string
+	EsPassword   string
+	K8sPod       string
+	K8sNamespace string
 }
 
 // Instance ...
@@ -61,13 +64,16 @@ func NewInstance() *Instance {
 	logs.SetFormatter(&logrus.JSONFormatter{})
 
 	config := &Config{
-		Confd:      getEnv("MFL_CONF_DIR", "etc\\mfl\\conf.d\\"),
-		Loglevel:   getEnv("MFL_LOG_LEVEL", "debug"),
-		Bindaddr:   getEnv("MFL_BIND_ADDR", "127.0.0.1:8080"),
-		Context:    getEnv("MFL_CONTEXT", "/"),
-		EsHost:     getEnv("MFL_ES_HOST", "127.0.0.1:9500"),
-		EsUser:     getEnv("MFL_ES_USER", "user"),
-		EsPassword: getEnv("MFL_ES_PASSWORD", "password"),
+		Confd:        getEnv("MFL_CONF_DIR", "etc\\mfl\\conf.d\\"),
+		Loglevel:     getEnv("MFL_LOG_LEVEL", "debug"),
+		Bindaddr:     getEnv("MFL_BIND_ADDR", "127.0.0.1:8080"),
+		Context:      getEnv("MFL_CONTEXT", "/"),
+		EsHost:       getEnv("MFL_ES_HOST", "127.0.0.1"),
+		EsPort:       getEnv("MFL_ES_PORT", "9200"),
+		EsUser:       getEnv("MFL_ES_USER", "user"),
+		EsPassword:   getEnv("MFL_ES_PASSWORD", "password"),
+		K8sPod:       getEnv("MFL_K8S_POD", ""),
+		K8sNamespace: getEnv("MFL_K8S_NAMESPACE", ""),
 	}
 
 	// Устанавливаем уровень важности сообщений, выводимых logrus
