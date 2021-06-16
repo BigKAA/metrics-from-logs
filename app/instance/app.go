@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/felixge/httpsnoop"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/sirupsen/logrus"
 )
 
@@ -31,8 +32,14 @@ func (i *Instance) Start() error {
 // ConfigRouter конфигурирует роутер
 func (i *Instance) ConfigRouter() {
 	// i.router.HandleFunc("/", i.HandlerRoot())
-	pods := i.router.PathPrefix(i.config.Context).Subrouter()
-	pods.HandleFunc("/", i.HandlerRoot())
+	if i.config.Context == "/" {
+		i.router.Path("/prometheus/metrics").Handler(promhttp.Handler())
+	} else {
+		i.router.Path(i.config.Context + "/prometheus/metrics").Handler(promhttp.Handler())
+	}
+
+	h := i.router.PathPrefix(i.config.Context).Subrouter()
+	h.HandleFunc("/", i.HandlerRoot())
 	// pods.HandleFunc("/{ns}", s.HandlerPods())
 }
 
