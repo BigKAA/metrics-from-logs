@@ -1,7 +1,13 @@
 # metrics-from-logs
 Получении метрик в формате Prometheus на основании информации из elasticsearch.
 
-В основном предполагается, что в elasticsearch хранятся логи. 
+Вторая версия программы.
+
+Фишки:
+* Позволяет горизонтальное масштабирование.
+* Требуется наличие Redis
+
+![schema](images/scheme.jpg)
 
 ## Конфигурация программы
 
@@ -17,6 +23,9 @@
 * MFL_ES_PASSWORD - пароль пользователя.
 * MFL_K8S_POD - под k8s. Подставляется как label метрики.
 * MFL_K8S_NAMESPACE - namespace k8s. Подставляется как label метрики.
+* MFL_REDIS_SERVER - сервер Redis. Значение по умолчанию - 127.0.0.1.
+* MFL_REDIS_PORT - порт сервера Redis. Значение по умолчанию - 6379.
+* MFL_REDIS_PASSWORD - пароль доступа к Redis. Если не определён - доступ без пароля.
 
 Если приложение запускается не в k8s, переменные MFL_K8S_POD и MFL_K8S_NAMESPACE определять не надо.
 
@@ -34,6 +43,8 @@ MFL_ES_HOST=127.0.0.1
 MFL_ES_PORT=9200
 MFL_ES_USER=user
 MFL_ES_PASSWORD=password
+MFL_REDIS_SERVER=redis_svc
+MFL_REDIS_PORT=1234
 ```
 
 ## Конфигурационные файлы сбора метрик

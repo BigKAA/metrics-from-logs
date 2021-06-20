@@ -8,7 +8,9 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"time"
 
+	"github.com/gomodule/redigo/redis"
 	"github.com/gorilla/mux"
 	"github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v3"
@@ -28,25 +30,29 @@ type Metric struct {
 
 // Config параметеры из конфигурационного файла программы.
 type Config struct {
-	Confd        string // Директория с конфигурационными файлами с запросами к es
-	Loglevel     string
-	Bindaddr     string
-	Context      string
-	EsHost       string
-	EsPort       string
-	EsUser       string
-	EsPassword   string
-	K8sPod       string
-	K8sNamespace string
-	isK8sRun     bool
+	Confd         string // Директория с конфигурационными файлами с запросами к es
+	Loglevel      string
+	Bindaddr      string
+	Context       string
+	EsHost        string
+	EsPort        string
+	EsUser        string
+	EsPassword    string
+	K8sPod        string
+	K8sNamespace  string
+	RedisServer   string
+	RedisPort     string
+	RedisPassword string
 }
 
 // Instance ...
 type Instance struct {
-	logs    *logrus.Logger
+	logs    *logrus.Entry
 	config  *Config
 	metrics []Metric
 	router  *mux.Router
+	pool    *redis.Pool
+	role    role
 }
 
 // NewInstance Создаёт приложение
@@ -61,29 +67,45 @@ func NewInstance() *Instance {
 		return nil
 	}
 
-	logs := logrus.New()
-	logs.SetFormatter(&logrus.JSONFormatter{})
-
 	config := &Config{
-		Confd:        getEnv("MFL_CONF_DIR", "etc\\mfl\\conf.d\\"),
-		Loglevel:     getEnv("MFL_LOG_LEVEL", "debug"),
-		Bindaddr:     getEnv("MFL_BIND_ADDR", "127.0.0.1:8080"),
-		Context:      getEnv("MFL_CONTEXT", "/"),
-		EsHost:       getEnv("MFL_ES_HOST", "127.0.0.1"),
-		EsPort:       getEnv("MFL_ES_PORT", "9200"),
-		EsUser:       getEnv("MFL_ES_USER", "user"),
-		EsPassword:   getEnv("MFL_ES_PASSWORD", "password"),
-		K8sPod:       getEnv("MFL_K8S_POD", ""),
-		K8sNamespace: getEnv("MFL_K8S_NAMESPACE", ""),
+		Confd:         getEnv("MFL_CONF_DIR", "etc\\mfl\\conf.d\\"),
+		Loglevel:      getEnv("MFL_LOG_LEVEL", "debug"),
+		Bindaddr:      getEnv("MFL_BIND_ADDR", "127.0.0.1:8080"),
+		Context:       getEnv("MFL_CONTEXT", "/"),
+		EsHost:        getEnv("MFL_ES_HOST", "127.0.0.1"),
+		EsPort:        getEnv("MFL_ES_PORT", "9200"),
+		EsUser:        getEnv("MFL_ES_USER", "user"),
+		EsPassword:    getEnv("MFL_ES_PASSWORD", "password"),
+		K8sPod:        getEnv("MFL_K8S_POD", ""),
+		K8sNamespace:  getEnv("MFL_K8S_NAMESPACE", ""),
+		RedisServer:   getEnv("MFL_REDIS_SERVER", "127.0.0.1"),
+		RedisPort:     getEnv("MFL_REDIS_PORT", "6379"),
+		RedisPassword: getEnv("MFL_REDIS_PASSWORD", ""),
 	}
+
+	logger := logrus.New()
+	logger.SetFormatter(&logrus.JSONFormatter{})
 
 	// Устанавливаем уровень важности сообщений, выводимых logrus
 	level, err := logrus.ParseLevel(config.Loglevel)
 	if err != nil {
-		logs.Warn("Не правильно определён loglevel в конфигурационном файле. Установлен уровень по умолчанию debug.")
+		logger.Warn("Не правильно определён loglevel в конфигурационном файле. Установлен уровень по умолчанию debug.")
 		level, _ = logrus.ParseLevel("debug")
 	}
-	logs.SetLevel(level)
+	logger.SetLevel(level)
+
+	// Подставляем в логи дополнительные поля для k8s и для простого приложения.
+	var logs *logrus.Entry
+	if config.K8sPod != "" {
+		logs = logger.WithFields(logrus.Fields{
+			"k8s_pod":       config.K8sPod,
+			"k8s_namespace": config.K8sNamespace,
+		})
+	} else {
+		logs = logger.WithFields(logrus.Fields{
+			"pid": strconv.Itoa(os.Getpid()),
+		})
+	}
 
 	// Проверяем наличие директории с конф файлами метрик
 	ret, err := exists(config.Confd)
@@ -110,13 +132,14 @@ func NewInstance() *Instance {
 		config:  config,
 		metrics: metrics,
 		router:  mux.NewRouter(),
+		pool:    newRedisPool(config.RedisServer+":"+config.RedisPort, config.RedisPassword),
 	}
 
 	return instance
 }
 
 // FillMetrics Заполняем структуру информацией о метриках
-func FillMetrics(dirPath string, logs *logrus.Logger) ([]Metric, error) {
+func FillMetrics(dirPath string, logs *logrus.Entry) ([]Metric, error) {
 	files, _ := filepath.Glob(dirPath + "*.yaml")
 	var ret []Metric
 	for _, fileName := range files {
@@ -171,4 +194,30 @@ func getEnv(key string, defaultVal string) string {
 	}
 
 	return defaultVal
+}
+
+// newRedisPool Создаёт новый pool подключений к Redis
+func newRedisPool(addr string, password string) *redis.Pool {
+	return &redis.Pool{
+		MaxIdle:     3,
+		IdleTimeout: 240 * time.Second,
+		// Dial or DialContext must be set. When both are set, DialContext takes precedence over Dial.
+		Dial: func() (redis.Conn, error) {
+			c, err := redis.Dial("tcp", addr)
+			if err != nil {
+				return nil, err
+			}
+			if password != "" {
+				if _, err := c.Do("AUTH", password); err != nil {
+					c.Close()
+					return nil, err
+				}
+			}
+			// if _, err := c.Do("SELECT", db); err != nil {
+			// 	c.Close()
+			// 	return nil, err
+			// }
+			return c, nil
+		},
+	}
 }
