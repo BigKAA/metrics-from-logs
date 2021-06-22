@@ -4,16 +4,13 @@ package instance
 import (
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"os"
-	"path/filepath"
 	"strconv"
 	"time"
 
 	"github.com/gomodule/redigo/redis"
 	"github.com/gorilla/mux"
 	"github.com/sirupsen/logrus"
-	"gopkg.in/yaml.v3"
 )
 
 // VERSION версия программы
@@ -114,65 +111,16 @@ func NewInstance() *Instance {
 		return nil
 	}
 
-	// Читаем метрики из конфигурационных файлов
-	metrics, err := FillMetrics(config.Confd, logs)
-	if err != nil || metrics == nil {
-		logs.Error("Неудалось сформировать массив метрик.")
-		return nil
-	}
-
-	if config.Loglevel == "debug" {
-		for _, m := range metrics {
-			logs.Debug("{ Метрика: " + m.Mertic + ", запрос: " + m.Query + ", периодичность: " + strconv.Itoa(m.Repeat) + "}")
-		}
-	}
-
 	instance := &Instance{
 		logs:    logs,
 		config:  config,
-		metrics: metrics,
+		metrics: nil,
 		router:  mux.NewRouter(),
 		pool:    newRedisPool(config.RedisServer+":"+config.RedisPort, config.RedisPassword),
+		role:    UNDEF,
 	}
 
 	return instance
-}
-
-// FillMetrics Заполняем структуру информацией о метриках
-func FillMetrics(dirPath string, logs *logrus.Entry) ([]Metric, error) {
-	files, _ := filepath.Glob(dirPath + "*.yaml")
-	var ret []Metric
-	for _, fileName := range files {
-		confFile, err := ioutil.ReadFile(fileName)
-		if err != nil {
-			return nil, err
-		}
-		var metric Metric
-		err = yaml.Unmarshal(confFile, &metric)
-		if err != nil {
-			return nil, err
-		}
-		if IsMetricExist(metric, ret) {
-			logs.Error("Не уникальная реплика " + metric.Mertic + " в файле " + fileName)
-			continue
-		}
-		ret = append(ret, metric)
-	}
-	return ret, nil
-}
-
-// IsMetricExist проверяет, есть ли метрика с таким именем в массиве
-func IsMetricExist(metric Metric, metrics []Metric) bool {
-	// Если массив пустой, то и метрика уникальная
-	if len(metrics) == 0 {
-		return false
-	}
-	for _, m := range metrics {
-		if m.Mertic == metric.Mertic {
-			return true
-		}
-	}
-	return false
 }
 
 // exists returns whether the given file or directory exists

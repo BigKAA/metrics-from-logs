@@ -2,10 +2,13 @@
 package instance
 
 import (
+	"context"
 	"html/template"
+	"log"
 	"net/http"
 	"os"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/felixge/httpsnoop"
@@ -22,23 +25,58 @@ type role string
 const (
 	SLAVE  role = "slave"
 	MASTER role = "master"
+	UNDEF  role = "undefined"
 )
 
 // Start start app
 func (i *Instance) Start() error {
-	isMasterChannel := make(chan bool)
 
-	go i.masterElection(isMasterChannel)
+	abort := make(chan bool)
 
+	go i.masterElection(abort)
+
+	httpServerExitDone := &sync.WaitGroup{}
+	httpServerExitDone.Add(1)
+	srv := i.doHttp(httpServerExitDone)
+
+	for {
+		select {
+		case <-abort:
+			break
+		}
+	}
+
+	if err := srv.Shutdown(context.TODO()); err != nil {
+		i.logs.Error(err) // failure/timeout shutting down the server gracefully
+	}
+
+	httpServerExitDone.Wait()
+
+	return nil
+}
+
+// doHttp запус http сервера.
+func (i *Instance) doHttp(wg *sync.WaitGroup) *http.Server {
 	i.ConfigRouter()
-	i.logs.Info("Starting API server Listen on: http://", i.config.Bindaddr, i.config.Context)
+	i.logs.Info("Starting http server Listen on: http://", i.config.Bindaddr, i.config.Context)
 
-	server := &http.Server{
+	srv := &http.Server{
 		Addr:    i.config.Bindaddr,
 		Handler: i.logRequestHandler(i.router),
 	}
 
-	return server.ListenAndServe()
+	go func() {
+		defer wg.Done() // let main know we are done cleaning up
+
+		// always returns error. ErrServerClosed on graceful close
+		if err := srv.ListenAndServe(); err != http.ErrServerClosed {
+			// unexpected error. port in use?
+			log.Fatalf("ListenAndServe(): %v", err)
+		}
+	}()
+
+	// returning reference so caller can call Shutdown()
+	return srv
 }
 
 // ConfigRouter конфигурирует роутер
@@ -73,75 +111,51 @@ func (i *Instance) logRequestHandler(h http.Handler) http.HandlerFunc {
 }
 
 // masterElection Выборы мастера
-func (i *Instance) masterElection(is chan bool) {
-	conn := i.pool.Get()
-	defer conn.Close()
-
-	var id string
-	if i.config.K8sPod != "" {
-		id = i.config.K8sPod
-	} else {
-		id = strconv.Itoa(os.Getpid()) // pid на разных машинах может совпадать...   <----- ????
-	}
-
-	current, err := conn.Do("SET", masterKey, id, "NX", "PX", masterExpire)
-	if err != nil {
-		i.logs.Error("Redis connection error: ", err)
-		return
-	}
-
-	if i.config.K8sPod != "" {
-		i.logs.Info("Выборы мастера - pod: ", id, " результат: ", current)
-	} else {
-		i.logs.Info("Выборы мастера - pid: ", id, " результат: ", current)
-	}
-
-	if current == "OK" {
-		i.beMaster(is)
-	} else {
-		i.beSlave(is)
-	}
-}
-
-func (i *Instance) beMaster(is chan bool) {
-
-	if i.role == MASTER {
-		return
-	}
-
-	i.logs.Info("start master")
-
-	i.role = MASTER
-
-	expireChan := time.NewTicker(time.Millisecond * masterExpire / 2).C
-
+func (i *Instance) masterElection(errorAbortChan chan<- bool) {
 	for {
-		<-expireChan
-		i.expireMaster()
-	}
-}
+		conn := i.pool.Get()
+		defer conn.Close()
 
-func (i *Instance) expireMaster() {
-	conn := i.pool.Get()
-	defer conn.Close()
+		// id - значение в редисе для идентификации мастера. Присваивается masterKey
+		var id string
+		if i.config.K8sPod != "" {
+			// если работаем в кубере, то id содержит имя пода
+			id = i.config.K8sPod
+		} else {
+			id = strconv.Itoa(os.Getpid()) // pid на разных машинах может совпадать...   <----- ????
+		}
 
-	if _, err := conn.Do("PEXPIRE", masterKey, masterExpire); err != nil {
-		i.logs.Error("EXPIRE MASTER ERROR: ", err)
-	}
-}
+		// Пытаемся присвоить masterKey значение id данного приложения.
+		current, err := conn.Do("SET", masterKey, id, "NX", "PX", masterExpire)
+		if err != nil {
+			i.logs.Error("Redis connection error: ", err)
+			return
+		}
 
-func (i *Instance) beSlave(is chan bool) {
-	if i.role == SLAVE {
-		return
-	}
+		if i.config.K8sPod != "" {
+			i.logs.Info("Выборы мастера - pod: ", id, " результат: ", current)
+		} else {
+			i.logs.Info("Выборы мастера - pid: ", id, " результат: ", current)
+		}
 
-	i.logs.Info("Start slave")
-	i.role = SLAVE
+		// Если значение присвоить удалось - то это мастер.
 
-	electionChan := time.NewTicker(time.Millisecond * masterExpire).C
+		if current == "OK" {
+			if err := i.beMaster(); err != nil {
+				close(errorAbortChan)
+				break // совсем плохо с конфигурацией
+			}
+		} else {
+			i.logs.Info("Start slave")
 
-	for {
-		<-electionChan
-		i.masterElection(is)
+			i.role = SLAVE
+
+			electionChan := time.NewTicker(time.Millisecond * masterExpire).C
+
+			for {
+				<-electionChan
+				break
+			}
+		}
 	}
 }
