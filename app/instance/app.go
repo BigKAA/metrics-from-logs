@@ -4,7 +4,6 @@ package instance
 import (
 	"context"
 	"html/template"
-	"log"
 	"net/http"
 	"os"
 	"strconv"
@@ -35,16 +34,13 @@ func (i *Instance) Start() error {
 
 	go i.masterElection(abort)
 
+	// запускаем http сервер отдельно go программой.
 	httpServerExitDone := &sync.WaitGroup{}
 	httpServerExitDone.Add(1)
 	srv := i.doHttp(httpServerExitDone)
 
-	for {
-		select {
-		case <-abort:
-			break
-		}
-	}
+	// если go программа закроет канал, значит надо завершать приложение.
+	<-abort
 
 	if err := srv.Shutdown(context.TODO()); err != nil {
 		i.logs.Error(err) // failure/timeout shutting down the server gracefully
@@ -71,7 +67,7 @@ func (i *Instance) doHttp(wg *sync.WaitGroup) *http.Server {
 		// always returns error. ErrServerClosed on graceful close
 		if err := srv.ListenAndServe(); err != http.ErrServerClosed {
 			// unexpected error. port in use?
-			log.Fatalf("ListenAndServe(): %v", err)
+			i.logs.Error("ListenAndServe(): %v", err)
 		}
 	}()
 
@@ -111,7 +107,7 @@ func (i *Instance) logRequestHandler(h http.Handler) http.HandlerFunc {
 }
 
 // masterElection Выборы мастера
-func (i *Instance) masterElection(errorAbortChan chan<- bool) {
+func (i *Instance) masterElection(abort chan bool) {
 	for {
 		conn := i.pool.Get()
 		defer conn.Close()
@@ -142,8 +138,10 @@ func (i *Instance) masterElection(errorAbortChan chan<- bool) {
 
 		if current == "OK" {
 			if err := i.beMaster(); err != nil {
-				close(errorAbortChan)
-				break // совсем плохо с конфигурацией
+				// совсем плохо с конфигурацией
+				// сигнализируем другим go программам о завершении приложения.
+				close(abort)
+				break
 			}
 		} else {
 			i.logs.Info("Start slave")
