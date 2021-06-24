@@ -5,6 +5,8 @@ import (
 	"errors"
 	"strconv"
 	"time"
+
+	"github.com/gomodule/redigo/redis"
 )
 
 // beMaster Запускаем процедуры мастера.
@@ -65,18 +67,11 @@ func (i *Instance) doMaster(abort <-chan bool) {
 	// time.Sleep(4000000000)
 	// i.logs.Debug("doMaster - TIK")
 	var err error = nil
-	var labels []string
-
-	if i.config.K8sPod != "" {
-		labels = []string{"pod", "namespace", "es_host"} // названия labels в метриках
-	} else {
-		labels = []string{"es_host"}
-	}
 
 	for _, metric := range i.metrics {
 		i.logs.Debug("Start metric: " + metric.Mertic)
 		if metric.Metrictype == "counter" {
-			go i.ProcessCounter(metric, labels, abort)
+			go i.ProcessCounter(metric, abort)
 		} else {
 			err = errors.New("Метрика: " + metric.Mertic + ", тип: " + metric.Metrictype + " не поддерживается.")
 			i.logs.Error(err)
@@ -89,7 +84,7 @@ func (i *Instance) doMaster(abort <-chan bool) {
 // labels - обязательные labels метрик.
 // abort - если канал закрывается - необходимо завершить работу go программы. Обычно если проигрываем
 // выборы мастера/
-func (i *Instance) ProcessCounter(metric Metric, labels []string, abort <-chan bool) {
+func (i *Instance) ProcessCounter(metric Metric, abort <-chan bool) {
 	// Задержка перед стартом цикла
 	time.Sleep(time.Duration(metric.Delay))
 	tick := time.NewTicker(time.Duration(metric.Repeat) * time.Second)
@@ -101,19 +96,56 @@ func (i *Instance) ProcessCounter(metric Metric, labels []string, abort <-chan b
 		select {
 		case <-tick.C:
 			// Время выполнения запроса к elasticsearch не должно превышать времени tick
-			// Тут должен быть запрос к эластику <==============================================================<<<<<<<====<<<<<<<
-			// i.logs.Debug("Query result: " + queryResult)
-
-			// добавление|тик метрики в Redis
-			if i.config.K8sPod != "" {
-				i.logs.Debug("Metric: "+metric.Mertic+" tick ", i.config.K8sPod, i.config.K8sNamespace, i.config.EsHost)
-				//
-			} else {
-				i.logs.Debug("Metric: "+metric.Mertic+" tick ", i.config.EsHost)
-				//
-			}
+			// Отсылаем запрос на выполнение в очередь.
+			i.send(&metric)
 		case <-abort: // если канал закрылся. Т.е. требуется завершить работу программы.
 			return
 		}
 	}
+}
+
+// send Ставит в очередь на выполнение метрики. Посылает уведомление о постановке в канал.
+func (i *Instance) send(metric *Metric) error {
+	conn := i.pool.Get()
+	defer conn.Close()
+
+	ti := time.Now().Add(time.Duration(metric.Delay)).Unix()
+	key := mfl_metric_prefix + ":" + metric.Mertic + ":" + strconv.Itoa(int(ti))
+	redisMetric := RedisMetric{
+		Metric:     metric.Mertic,
+		Metrichelp: metric.Mertichelp,
+		Metrictype: metric.Metrictype,
+		Query:      metric.Query,
+	}
+
+	i.logs.Debug("Metric: " + metric.Mertic + ", key: " + key)
+
+	// Формируем hash
+	_, err := conn.Do("HSET", redis.Args{}.Add(key).AddFlat(redisMetric)...)
+	if err != nil {
+		i.logs.Error("Redis HSET error: ", err)
+		return err
+	}
+
+	_, err = conn.Do("EXPIRE", key, metric.Repeat*2)
+	if err != nil {
+		i.logs.Error("Redis EXPIRE error: ", err)
+		return err
+	}
+
+	// Добавляем hash в очередь.
+	_, err = conn.Do("LPUSH", mfl_list, key)
+	if err != nil {
+		i.logs.Error("Redis LPUSH error: ", err)
+		return err
+	}
+
+	// Посылаем уведомление в канал, о добавлениии hash в очередь.
+	_, err = conn.Do("PUBLISH", mfl_query, key)
+	if err != nil {
+		i.logs.Error("Redis PUBLISH error: ", err)
+		return err
+	}
+
+	return nil
 }
