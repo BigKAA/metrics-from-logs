@@ -10,7 +10,7 @@
             "request": "launch",
             "mode": "debug",
             "cwd": "${workspaceFolder}",
-            "program": "${workspaceFolder}\\cmd\\main\\main.go"
+            "program": "${workspaceFolder}\\main.go"
         }
     ]
 }

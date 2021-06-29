@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/gomodule/redigo/redis"
+	"github.com/sirupsen/logrus"
 )
 
 // beMaster Запускаем процедуры мастера.
@@ -97,17 +98,22 @@ func (i *Instance) ProcessCounter(metric Metric, abort <-chan bool) {
 		case <-tick.C:
 			// Время выполнения запроса к elasticsearch не должно превышать времени tick
 			// Отсылаем запрос на выполнение в очередь.
-			i.send(&metric)
+			i.envelopeSend(&metric)
 		case <-abort: // если канал закрылся. Т.е. требуется завершить работу программы.
 			return
 		}
 	}
 }
 
-// send Ставит в очередь на выполнение метрики. Посылает уведомление о постановке в канал.
-func (i *Instance) send(metric *Metric) error {
+func (i *Instance) envelopeSend(metric *Metric) error {
 	conn := i.pool.Get()
 	defer conn.Close()
+
+	return send(conn, i.logs, metric)
+}
+
+// send Ставит в очередь на выполнение метрики. Посылает уведомление о постановке в канал.
+func send(conn redis.Conn, logs *logrus.Entry, metric *Metric) error {
 
 	ti := time.Now().Add(time.Duration(metric.Delay)).Unix()
 	key := mfl_metric_prefix + ":" + metric.Mertic + ":" + strconv.Itoa(int(ti))
@@ -116,34 +122,36 @@ func (i *Instance) send(metric *Metric) error {
 		Metrichelp: metric.Mertichelp,
 		Metrictype: metric.Metrictype,
 		Query:      metric.Query,
+		Index:      metric.Index,
+		Repeat:     strconv.Itoa(metric.Repeat),
 	}
 
-	i.logs.Debug("Metric: " + metric.Mertic + ", key: " + key)
+	logs.Debug("f: send - Metric: " + metric.Mertic + ", key: " + key)
 
 	// Формируем hash
 	_, err := conn.Do("HSET", redis.Args{}.Add(key).AddFlat(redisMetric)...)
 	if err != nil {
-		i.logs.Error("Redis HSET error: ", err)
+		logs.Error("f: send - Redis HSET error: ", err)
 		return err
 	}
 
 	_, err = conn.Do("EXPIRE", key, metric.Repeat*2)
 	if err != nil {
-		i.logs.Error("Redis EXPIRE error: ", err)
+		logs.Error("f: send - Redis EXPIRE error: ", err)
 		return err
 	}
 
 	// Добавляем hash в очередь.
 	_, err = conn.Do("LPUSH", mfl_list, key)
 	if err != nil {
-		i.logs.Error("Redis LPUSH error: ", err)
+		logs.Error("f: send - Redis LPUSH error: ", err)
 		return err
 	}
 
 	// Посылаем уведомление в канал, о добавлениии hash в очередь.
 	_, err = conn.Do("PUBLISH", mfl_query, key)
 	if err != nil {
-		i.logs.Error("Redis PUBLISH error: ", err)
+		logs.Error("f: send - Redis PUBLISH error: ", err)
 		return err
 	}
 

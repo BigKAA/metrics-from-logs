@@ -3,6 +3,7 @@ module github.com/BigKAA/metrics-from-logs
 go 1.16
 
 require (
+	github.com/elastic/go-elasticsearch/v8 v8.0.0-20210608143047-aa1301e7ba9d
 	github.com/felixge/httpsnoop v1.0.2
 	github.com/gomodule/redigo v1.8.5
 	github.com/gorilla/mux v1.8.0

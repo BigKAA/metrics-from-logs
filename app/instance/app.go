@@ -27,6 +27,8 @@ type RedisMetric struct {
 	Metrichelp string `redis:"metrichelp"`
 	Metrictype string `redis:"metrictype"` // Тип метрики: counter, gauge, histogram, summary
 	Query      string `redis:"query"`      // Запрос к es
+	Index      string `redis:"index"`      // es index or index pattern
+	Repeat     string `redis:"repeat"`     // Периодичность повторения запросов.
 }
 
 type role string
@@ -80,7 +82,7 @@ func (i *Instance) doHttp(wg *sync.WaitGroup) *http.Server {
 		// always returns error. ErrServerClosed on graceful close
 		if err := srv.ListenAndServe(); err != http.ErrServerClosed {
 			// unexpected error. port in use?
-			i.logs.Error("ListenAndServe(): %v", err)
+			i.logs.Error("ListenAndServe(): ", err)
 		}
 	}()
 

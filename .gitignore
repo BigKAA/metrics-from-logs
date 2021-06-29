@@ -18,3 +18,4 @@ vendor/
 etc/
 
 METRICS.md
+.env
