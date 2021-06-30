@@ -17,13 +17,14 @@ import (
 const VERSION = "0.01"
 
 type Metric struct {
-	Mertic     string `yaml:"metric"` // Название метрики. Должно быть уникальным.
-	Mertichelp string `yaml:"metrichelp"`
-	Metrictype string `yaml:"metrictype"` // Тип метрики: counter, gauge, histogram, summary
-	Query      string `yaml:"query"`      // Запрос к es
-	Index      string `yaml:"index"`      // Имя индекса (шаблона), в котором происходит поиск
-	Repeat     int    `yaml:"repeat"`     // Количество секунд, через сколько повторять запрос
-	Delay      int64  `yaml:"delay"`      // Количество секунд, задержка после старта программы перед началом цикла опроса.
+	Mertic     string             `yaml:"metric"` // Название метрики. Должно быть уникальным.
+	Mertichelp string             `yaml:"metrichelp"`
+	Metrictype string             `yaml:"metrictype"` // Тип метрики: counter, gauge, histogram, summary
+	Query      string             `yaml:"query"`      // Запрос к es
+	Index      string             `yaml:"index"`      // Имя индекса (шаблона), в котором происходит поиск
+	Repeat     int                `yaml:"repeat"`     // Количество секунд, через сколько повторять запрос
+	Delay      int64              `yaml:"delay"`      // Количество секунд, задержка после старта программы перед началом цикла опроса.
+	Labels     []PrometheusLabels `redis:"labels"`
 }
 
 // Config параметеры из конфигурационного файла программы.

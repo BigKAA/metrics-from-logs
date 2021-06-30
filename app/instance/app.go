@@ -23,12 +23,26 @@ const (
 )
 
 type RedisMetric struct {
-	Metric     string `redis:"metric"` // Название метрики. Должно быть уникальным.
-	Metrichelp string `redis:"metrichelp"`
-	Metrictype string `redis:"metrictype"` // Тип метрики: counter, gauge, histogram, summary
-	Query      string `redis:"query"`      // Запрос к es
-	Index      string `redis:"index"`      // es index or index pattern
-	Repeat     string `redis:"repeat"`     // Периодичность повторения запросов.
+	Metric     string             `redis:"metric"` // Название метрики. Должно быть уникальным.
+	Metrichelp string             `redis:"metrichelp"`
+	Metrictype string             `redis:"metrictype"` // Тип метрики: counter, gauge, histogram, summary
+	Query      string             `redis:"query"`      // Запрос к es
+	Index      string             `redis:"index"`      // es index or index pattern
+	Repeat     string             `redis:"repeat"`     // Периодичность повторения запросов.
+	Labels     []PrometheusLabels `redis:"labels"`
+}
+
+type PrometheusLabels struct {
+	Name  string
+	Value string
+}
+
+// Формат hash метрики в redis
+type PrometheusMetric struct {
+	Metric string             `redis:"metric"`
+	Type   string             `redis:"type"`
+	Count  int64              `redis:"count"`
+	Labels []PrometheusLabels `redis:"labels"`
 }
 
 type role string

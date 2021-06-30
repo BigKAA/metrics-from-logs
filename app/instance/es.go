@@ -13,24 +13,27 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func (i *Instance) es(rMetric *RedisMetric) error {
+// es Запрос в es
+func (i *Instance) es(rMetric *RedisMetric) (int64, error) {
 	es, err := getEsClient(i)
 	if err != nil {
 		i.logs.Error("f: es - error getEsClient: ", err)
-		return err
+		return 0, err
 	}
 
+	// получаем количество записей
 	count, err := executeEsCount(es, rMetric, i.logs)
 	if err != nil {
 		i.logs.Error("f: es - error executeEsCount: ", err)
-		return err
+		return 0, err
 	}
-
 	i.logs.Debug("f: es - count: ", count)
 
-	return nil
+	return count, nil
 }
 
+// executeEsCount Выполнение запроса типа _count
+// Возвращает число, количество записей, удовлетворяющих запросы.
 func executeEsCount(es *elasticsearch.Client, rMetric *RedisMetric, logs *logrus.Entry) (int64, error) {
 
 	bQuery := []byte(rMetric.Query)
