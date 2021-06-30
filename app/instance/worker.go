@@ -37,11 +37,11 @@ func (i *Instance) envelopePocessRecievedMetric() {
 	conn := i.pool.Get()
 	defer conn.Close()
 
-	rMetric, _ :=processQuery(conn, i.logs)
+	rMetric, _ := processQuery(conn, i.logs)
 
 	// Тут добавлять вызов запроса в эластик.
 
-	err := i.es(rMetric)
+	err := i.es(&rMetric)
 	if err != nil {
 		i.logs.Error("f: envelopePocessRecievedMetric - ", err)
 	}
@@ -156,6 +156,7 @@ func parseQuery(query string, logs *logrus.Entry, lte time.Time, gte time.Time) 
 
 	templ, err := template.New("es").Parse(query)
 	if err != nil {
+		logs.Error("f: parseQuery - error Parse: ", err)
 		return "", err
 	}
 	var buf bytes.Buffer

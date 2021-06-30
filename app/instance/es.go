@@ -5,44 +5,71 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"net"
-	"net/http"
-	"time"
+	"os"
+	"strings"
 
-	"github.com/elastic/go-elasticsearch/v8"
+	"github.com/elastic/go-elasticsearch/v7"
+	"github.com/elastic/go-elasticsearch/v7/estransport"
+	"github.com/sirupsen/logrus"
 )
 
-func (i *Instance) es(rMetric RedisMetric) error {
+func (i *Instance) es(rMetric *RedisMetric) error {
 	es, err := getEsClient(i)
 	if err != nil {
 		i.logs.Error("f: es - error getEsClient: ", err)
 		return err
 	}
 
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(rMetric.Query); err != nil {
-		i.logs.Error("f: es - error encoding query: ", err)
+	count, err := executeEsCount(es, rMetric, i.logs)
+	if err != nil {
+		i.logs.Error("f: es - error executeEsCount: ", err)
 		return err
 	}
+
+	i.logs.Debug("f: es - count: ", count)
+
+	return nil
+}
+
+func executeEsCount(es *elasticsearch.Client, rMetric *RedisMetric, logs *logrus.Entry) (int64, error) {
+
+	bQuery := []byte(rMetric.Query)
+	isValid := json.Valid(bQuery)
+	if !isValid {
+		logs.Debug("constructQuery() ERROR: query string not valid:", rMetric.Query)
+	} else {
+		logs.Debug("constructQuery() valid JSON:", isValid)
+	}
+
+	var b strings.Builder
+	b.WriteString(rMetric.Query)
+	read := strings.NewReader(b.String())
+
+	var buf bytes.Buffer
+
+	if err := json.NewEncoder(&buf).Encode(read); err != nil {
+		logs.Error("json.NewEncoder() ERROR:", err)
+	}
+
 	res, err := es.Count(
 		es.Count.WithContext(context.Background()),
 		es.Count.WithIndex(rMetric.Index),
 		es.Count.WithBody(&buf),
 	)
 	if err != nil {
-		i.logs.Error("f: es - error search: ", err)
-		return err
+		logs.Error("f: es - error search: ", err)
+		return 0, err
 	}
 	defer res.Body.Close()
 
 	if res.IsError() {
 		var e map[string]interface{}
 		if err := json.NewDecoder(res.Body).Decode(&e); err != nil {
-			i.logs.Error("f: es - error parsing respons body: ", err)
-			return err
+			logs.Error("f: es - error parsing respons body: ", err)
+			return 0, err
 		} else {
 			// Print the response status and error information.
-			i.logs.Debugf("[%s] %s: %s",
+			logs.Debugf("[%s] %s: %s",
 				res.Status(),
 				e["error"].(map[string]interface{})["type"],
 				e["error"].(map[string]interface{})["reason"],
@@ -52,17 +79,19 @@ func (i *Instance) es(rMetric RedisMetric) error {
 
 	var r map[string]interface{}
 	if err := json.NewDecoder(res.Body).Decode(&r); err != nil {
-		i.logs.Errorf("f: es - error parsing the response body: %s", err)
+		logs.Errorf("f: es - error parsing the response body: %s", err)
 	}
 	// Print the response status, number of results, and request duration.
-	i.logs.Debugf(
+	logs.Debugf(
 		"f: es - [%s] count %d ",
 		res.Status(),
 		int(r["count"].(float64)),
 	)
-	return nil
+	return int64(r["count"].(float64)), nil
 }
 
+// getEsClient Получаем клиент elasticsearch с указанными конфигурационными
+// параметрами.
 func getEsClient(i *Instance) (*elasticsearch.Client, error) {
 	cfg := elasticsearch.Config{
 		Addresses: []string{
@@ -70,11 +99,12 @@ func getEsClient(i *Instance) (*elasticsearch.Client, error) {
 		},
 		Username: i.config.EsUser,
 		Password: i.config.EsPassword,
-		Transport: &http.Transport{
-			MaxIdleConnsPerHost:   10,
-			ResponseHeaderTimeout: time.Millisecond,
-			DialContext:           (&net.Dialer{Timeout: time.Nanosecond}).DialContext,
-		},
+		// Transport: &http.Transport{
+		// 	MaxIdleConnsPerHost:   10,
+		// 	ResponseHeaderTimeout: time.Millisecond,
+		// 	DialContext:           (&net.Dialer{Timeout: time.Nanosecond}).DialContext,
+		// },
+		Logger: &estransport.JSONLogger{Output: os.Stdout},
 	}
 
 	es, err := elasticsearch.NewClient(cfg)
