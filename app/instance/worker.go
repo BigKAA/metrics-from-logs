@@ -40,11 +40,61 @@ func (i *Instance) envelopePocessRecievedMetric() {
 	rMetric, _ := processQuery(conn, i.logs)
 
 	// Тут добавлять вызов запроса в эластик.
-
-	err := i.es(&rMetric)
+	count, err := i.es(&rMetric)
 	if err != nil {
 		i.logs.Error("f: envelopePocessRecievedMetric - ", err)
 	}
+
+	// формируем метрику в redis
+	// с именем:  mfl_metric_prefix:название_метрики:count
+	// Время устаревания метрики: Metric.Repeat * 2
+	err = updatePrometheusMetric(i.pool, i.logs, count, &rMetric)
+	if err != nil {
+		i.logs.Error("f: es - error updateMetric: ", err)
+		return
+	}
+}
+
+// updateMetric формируем () метрику в redis
+// с именем:  mfl_metric_prefix:название_метрики:count
+// Время устаревания метрики: Metric.Repeat * 2
+func updatePrometheusMetric(pool *redis.Pool, logs *logrus.Entry, count int64, rMetric *RedisMetric) error {
+	conn := pool.Get()
+	defer conn.Close()
+	// Формируем имя метрики
+	metric_key := mfl_metric_prefix + ":" + rMetric.Metric + ":count"
+
+	promMetric := PrometheusMetric{
+		Metric: rMetric.Metric,
+		Labels: rMetric.Labels,
+		Type:   rMetric.Metrictype,
+		Count:  0,
+	}
+
+	// Получаем старое значение метрики
+	values, err := redis.Values(conn.Do("HGETALL", metric_key))
+	if err == nil {
+		redis.ScanStruct(values, &promMetric)
+	}
+
+	// Добавляем новое значение к существующему.
+	promMetric.Count += count
+
+	// Записывавем hash в редис
+	// Формируем hash
+	_, err = conn.Do("HSET", redis.Args{}.Add(metric_key).AddFlat(promMetric)...)
+	if err != nil {
+		logs.Error("f: send - Redis HSET error: ", err)
+		return err
+	}
+
+	expire, _ := strconv.ParseInt(rMetric.Repeat, 10, 0)
+	_, err = conn.Do("EXPIRE", metric_key, expire*2)
+	if err != nil {
+		logs.Error("f: send - Redis EXPIRE error: ", err)
+		return err
+	}
+	return nil
 }
 
 // processQuery Суммирующая функция обработки
