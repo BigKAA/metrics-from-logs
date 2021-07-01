@@ -15,11 +15,12 @@ import (
 )
 
 const (
-	masterKey         = "mfl_master_key" // имя ключа для выбора мастера
-	masterExpire      = 5000             // Время устаревания токена в ms (5 с)
-	mfl_query         = "mfl_query"      // имя канала для посылки события
-	mfl_list          = "mfl_list"       // имя листа (очереди) в которую записывает задания мастер.
-	mfl_metric_prefix = "mfl_metric"     // с чего начинается имя ключа метрики
+	masterKey          = "mfl_master_key"              // имя ключа для выбора мастера
+	masterExpire       = 5000                          // Время устаревания токена в ms (5 с)
+	mfl_query          = "mfl_query"                   // имя канала для посылки события
+	mfl_list           = "mfl_list"                    // имя листа (очереди) в которую записывает задания мастер.
+	mfl_metric_prefix  = "mfl_metric"                  // с чего начинается имя ключа метрики
+	expire_prom_metric = time.Duration(24) * time.Hour // время удаление метрики прометея из редиса
 )
 
 type RedisMetric struct {

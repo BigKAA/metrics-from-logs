@@ -11,6 +11,70 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+func Test_updatePrometheusMetric(t *testing.T) {
+
+	prometheusLabels := [2]PrometheusLabels{
+		{
+			Name:  "test_name_1",
+			Value: "test_value_1",
+		},
+		{
+			Name:  "test_name_11",
+			Value: "test_value_11",
+		},
+	}
+
+	redisMetric := &RedisMetric{
+		Metric:     "test_metric_1",
+		Metrichelp: "help for metric",
+		Metrictype: "counter",
+		Query: "{ \"query\": { \"bool\": {  \"filter\": [ { " +
+			" \"range\": { \"@timestamp\": { " +
+			" \"gte\": \"{{.Gte}}\", " +
+			" \"lte\": \"{{.Lte}}\", " +
+			"\"format\": \"strict_date_optional_time\" " +
+			" } } }, { " +
+			"\"match_phrase\": {  \"status\": 200 } } ] } }",
+		Index:  "oasi-stage-app-nginx-access-*",
+		Repeat: "10",
+		Labels: prometheusLabels[0:1],
+	}
+
+	logger := logrus.New()
+	logger.SetFormatter(&logrus.JSONFormatter{})
+	level, _ := logrus.ParseLevel("debug")
+	logger.SetLevel(level)
+	logs := logger.WithFields(logrus.Fields{
+		"pid": strconv.Itoa(os.Getpid()),
+	})
+
+	config := &Config{
+		Confd:         "etc\\mfl\\conf.d\\",
+		Loglevel:      "debug",
+		Bindaddr:      "127.0.0.1:8080",
+		Context:       "/",
+		EsHost:        "127.0.0.1",
+		EsPort:        "9200",
+		EsUser:        "user",
+		EsPassword:    "password",
+		K8sPod:        "",
+		K8sNamespace:  "",
+		RedisServer:   "127.0.0.1",
+		RedisPort:     "6379",
+		RedisPassword: "",
+	}
+
+	pool := newRedisPool(config.RedisServer+":"+config.RedisPort, config.RedisPassword)
+	//
+	err := updatePrometheusMetric(pool, logs, 5111, redisMetric)
+	if err != nil {
+		t.Error("ERROR updatePrometheusMetric: ", err)
+		t.Fail()
+		return
+	}
+	t.Log("Success")
+}
+
 func Test_redisMagic(t *testing.T) {
 	// Подготовка
 	metric := &Metric{

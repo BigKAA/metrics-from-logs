@@ -72,8 +72,8 @@ func updatePrometheusMetric(pool *redis.Pool, logs *logrus.Entry, count int64, r
 	}
 
 	// Получаем старое значение метрики
-	values, err := redis.Values(conn.Do("HGETALL", metric_key))
-	if err == nil {
+	values, _ := redis.Values(conn.Do("HGETALL", metric_key))
+	if cap(values) != 0 {
 		redis.ScanStruct(values, &promMetric)
 	}
 
@@ -82,14 +82,13 @@ func updatePrometheusMetric(pool *redis.Pool, logs *logrus.Entry, count int64, r
 
 	// Записывавем hash в редис
 	// Формируем hash
-	_, err = conn.Do("HSET", redis.Args{}.Add(metric_key).AddFlat(promMetric)...)
+	_, err := conn.Do("HSET", redis.Args{}.Add(metric_key).AddFlat(promMetric)...)
 	if err != nil {
 		logs.Error("f: send - Redis HSET error: ", err)
 		return err
 	}
 
-	expire, _ := strconv.ParseInt(rMetric.Repeat, 10, 0)
-	_, err = conn.Do("EXPIRE", metric_key, expire*2)
+	_, err = conn.Do("EXPIRE", metric_key, expire_prom_metric.Seconds())
 	if err != nil {
 		logs.Error("f: send - Redis EXPIRE error: ", err)
 		return err
