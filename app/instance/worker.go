@@ -3,6 +3,7 @@ package instance
 
 import (
 	"bytes"
+	"encoding/json"
 	"html/template"
 	"strconv"
 	"time"
@@ -39,7 +40,7 @@ func (i *Instance) envelopePocessRecievedMetric() {
 
 	rMetric, _ := processQuery(conn, i.logs)
 
-	// Тут добавлять вызов запроса в эластик.
+	// Запрос в elasticsearch
 	count, err := i.es(&rMetric)
 	if err != nil {
 		i.logs.Error("f: envelopePocessRecievedMetric - ", err)
@@ -68,6 +69,7 @@ func updatePrometheusMetric(pool *redis.Pool, logs *logrus.Entry, count int64, r
 		Metric: rMetric.Metric,
 		Labels: rMetric.Labels,
 		Type:   rMetric.Metrictype,
+		Help:   rMetric.Metrichelp,
 		Count:  0,
 	}
 
@@ -80,11 +82,16 @@ func updatePrometheusMetric(pool *redis.Pool, logs *logrus.Entry, count int64, r
 	// Добавляем новое значение к существующему.
 	promMetric.Count += count
 
-	// Записывавем hash в редис
-	// Формируем hash
-	_, err := conn.Do("HSET", redis.Args{}.Add(metric_key).AddFlat(promMetric)...)
+	b, err := json.Marshal(&promMetric)
 	if err != nil {
-		logs.Error("f: send - Redis HSET error: ", err)
+		logs.Error("f: updatePrometheusMetric - json.Marshal error: ", err)
+		return err
+	}
+
+	// Записываем метрику в Redis
+	_, err = conn.Do("SET", metric_key, string(b))
+	if err != nil {
+		logs.Error("f: updatePrometheusMetric - Redis SET error: ", err)
 		return err
 	}
 
@@ -133,14 +140,19 @@ func redisMagic(conn redis.Conn, logs *logrus.Entry) (RedisMetric, int64, int64,
 	}
 
 	// Читаем метрику
-	values, err := redis.Values(conn.Do("HGETALL", metric_key))
+	mString, err := redis.String(conn.Do("GET", metric_key))
 	if err != nil {
 		logs.Error("f: redisMagic - Redis HGETALL error: ", err)
 		return RedisMetric{}, 0, 0, err
 	}
-
+	b := []byte(mString)
 	rMetric := RedisMetric{}
-	redis.ScanStruct(values, &rMetric)
+	// Парсим json
+	err = json.Unmarshal(b, &rMetric)
+	if err != nil {
+		logs.Error("f: redisMagic - json.Unmarshal error: ", err)
+		return RedisMetric{}, 0, 0, err
+	}
 
 	// Удаляем метрику
 	_, err = conn.Do("DEL", metric_key)
@@ -181,10 +193,10 @@ func redisMagic(conn redis.Conn, logs *logrus.Entry) (RedisMetric, int64, int64,
 	if err != nil {
 		logs.Error("f: redisMagic - Redis SET metric time error: ", err)
 	}
-	rep, err := strconv.ParseInt(rMetric.Repeat, 10, 64)
-	conn.Do("EXPIRE", metricTimeKey, rep*2)
+
+	_, err = conn.Do("EXPIRE", metricTimeKey, expire_prom_metric.Seconds())
 	if err != nil {
-		logs.Error("f: redisMagic - Redis EXPIRE metric time error: ", err)
+		logs.Error("f: redisMagic - Redis EXPIRE error: ", err)
 	}
 
 	return rMetric, lteUnix, gteUnix, nil

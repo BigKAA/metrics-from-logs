@@ -14,46 +14,6 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-const (
-	masterKey          = "mfl_master_key"              // имя ключа для выбора мастера
-	masterExpire       = 5000                          // Время устаревания токена в ms (5 с)
-	mfl_query          = "mfl_query"                   // имя канала для посылки события
-	mfl_list           = "mfl_list"                    // имя листа (очереди) в которую записывает задания мастер.
-	mfl_metric_prefix  = "mfl_metric"                  // с чего начинается имя ключа метрики
-	expire_prom_metric = time.Duration(24) * time.Hour // время удаление метрики прометея из редиса
-)
-
-type RedisMetric struct {
-	Metric     string             `redis:"metric"` // Название метрики. Должно быть уникальным.
-	Metrichelp string             `redis:"metrichelp"`
-	Metrictype string             `redis:"metrictype"` // Тип метрики: counter, gauge, histogram, summary
-	Query      string             `redis:"query"`      // Запрос к es
-	Index      string             `redis:"index"`      // es index or index pattern
-	Repeat     string             `redis:"repeat"`     // Периодичность повторения запросов.
-	Labels     []PrometheusLabels `redis:"labels"`
-}
-
-type PrometheusLabels struct {
-	Name  string
-	Value string
-}
-
-// Формат hash метрики в redis
-type PrometheusMetric struct {
-	Metric string             `redis:"metric"`
-	Type   string             `redis:"type"`
-	Count  int64              `redis:"count"`
-	Labels []PrometheusLabels `redis:"labels"`
-}
-
-type role string
-
-const (
-	SLAVE  role = "slave"
-	MASTER role = "master"
-	UNDEF  role = "undefined"
-)
-
 // Start start app
 func (i *Instance) Start() error {
 
@@ -109,6 +69,7 @@ func (i *Instance) doHttp(wg *sync.WaitGroup) *http.Server {
 func (i *Instance) ConfigRouter() {
 	h := i.router.PathPrefix(i.config.Context).Subrouter()
 	h.HandleFunc("/", i.HandlerRoot())
+	h.HandleFunc("/metrics/", i.HandlerMetrics())
 }
 
 // HandlerRoot Обработка запроса /

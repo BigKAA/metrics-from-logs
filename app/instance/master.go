@@ -2,6 +2,7 @@
 package instance
 
 import (
+	"encoding/json"
 	"errors"
 	"strconv"
 	"time"
@@ -21,13 +22,14 @@ func (i *Instance) beMaster() error {
 	i.role = MASTER
 
 	// Читаем метрики из конфигурационных файлов
-	err := i.FillMetrics()
-	if err != nil || i.metrics == nil {
+	mt, err := FillMetrics(i.logs, i.config)
+	if err != nil || mt == nil {
 		i.logs.Error("Неудалось сформировать массив метрик. ", err)
 		// если не удалось прочитать конфигурационный файл - это критическая ошибка.
 		// можно выклюать программу.
 		return err
 	}
+	i.metrics = mt
 
 	if i.config.Loglevel == "debug" {
 		for _, m := range i.metrics {
@@ -124,18 +126,25 @@ func send(conn redis.Conn, logs *logrus.Entry, metric *Metric) error {
 		Query:      metric.Query,
 		Index:      metric.Index,
 		Repeat:     strconv.Itoa(metric.Repeat),
+		Labels:     metric.Labels,
 	}
 
 	logs.Debug("f: send - Metric: " + metric.Mertic + ", key: " + key)
 
-	// Формируем hash
-	_, err := conn.Do("HSET", redis.Args{}.Add(key).AddFlat(redisMetric)...)
+	// Формируем метрику-задание в виде json записи
+	b, err := json.Marshal(&redisMetric)
 	if err != nil {
-		logs.Error("f: send - Redis HSET error: ", err)
+		logs.Error("f: send - json.Marshal error: ", err)
 		return err
 	}
 
-	_, err = conn.Do("EXPIRE", key, metric.Repeat*2)
+	_, err = conn.Do("SET", key, string(b))
+	if err != nil {
+		logs.Error("f: send - Redis SET error: ", err)
+		return err
+	}
+
+	_, err = conn.Do("EXPIRE", key, expire_prom_metric.Seconds())
 	if err != nil {
 		logs.Error("f: send - Redis EXPIRE error: ", err)
 		return err

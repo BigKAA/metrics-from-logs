@@ -2,57 +2,19 @@
 package instance
 
 import (
+	"errors"
 	"flag"
 	"fmt"
+	"log"
 	"os"
 	"strconv"
 	"time"
 
 	"github.com/gomodule/redigo/redis"
 	"github.com/gorilla/mux"
+	"github.com/joho/godotenv"
 	"github.com/sirupsen/logrus"
 )
-
-// VERSION версия программы
-const VERSION = "0.01"
-
-type Metric struct {
-	Mertic     string             `yaml:"metric"` // Название метрики. Должно быть уникальным.
-	Mertichelp string             `yaml:"metrichelp"`
-	Metrictype string             `yaml:"metrictype"` // Тип метрики: counter, gauge, histogram, summary
-	Query      string             `yaml:"query"`      // Запрос к es
-	Index      string             `yaml:"index"`      // Имя индекса (шаблона), в котором происходит поиск
-	Repeat     int                `yaml:"repeat"`     // Количество секунд, через сколько повторять запрос
-	Delay      int64              `yaml:"delay"`      // Количество секунд, задержка после старта программы перед началом цикла опроса.
-	Labels     []PrometheusLabels `redis:"labels"`
-}
-
-// Config параметеры из конфигурационного файла программы.
-type Config struct {
-	Confd         string // Директория с конфигурационными файлами с запросами к es
-	Loglevel      string
-	Bindaddr      string
-	Context       string
-	EsHost        string
-	EsPort        string
-	EsUser        string
-	EsPassword    string
-	K8sPod        string
-	K8sNamespace  string
-	RedisServer   string
-	RedisPort     string
-	RedisPassword string
-}
-
-// Instance ...
-type Instance struct {
-	logs    *logrus.Entry
-	config  *Config
-	metrics []Metric
-	router  *mux.Router
-	pool    *redis.Pool
-	role    role
-}
 
 // NewInstance Создаёт приложение
 func NewInstance() *Instance {
@@ -66,22 +28,38 @@ func NewInstance() *Instance {
 		return nil
 	}
 
-	config := &Config{
-		Confd:         getEnv("MFL_CONF_DIR", "etc\\mfl\\conf.d\\"),
-		Loglevel:      getEnv("MFL_LOG_LEVEL", "debug"),
-		Bindaddr:      getEnv("MFL_BIND_ADDR", "127.0.0.1:8080"),
-		Context:       getEnv("MFL_CONTEXT", "/"),
-		EsHost:        getEnv("MFL_ES_HOST", "127.0.0.1"),
-		EsPort:        getEnv("MFL_ES_PORT", "9200"),
-		EsUser:        getEnv("MFL_ES_USER", "user"),
-		EsPassword:    getEnv("MFL_ES_PASSWORD", "password"),
-		K8sPod:        getEnv("MFL_K8S_POD", ""),
-		K8sNamespace:  getEnv("MFL_K8S_NAMESPACE", ""),
-		RedisServer:   getEnv("MFL_REDIS_SERVER", "127.0.0.1"),
-		RedisPort:     getEnv("MFL_REDIS_PORT", "6379"),
-		RedisPassword: getEnv("MFL_REDIS_PASSWORD", ""),
+	config := getConfig()
+
+	logs := getLogEntry(config)
+
+	instance, err := getInstance(config, logs)
+	if err != nil {
+		logs.Error("f: getInstance - :", err)
 	}
 
+	return instance
+}
+
+func getInstance(config *Config, logs *logrus.Entry) (*Instance, error) {
+	// Проверяем наличие директории с конф файлами метрик
+	ret, err := exists(config.Confd)
+	if !ret || err != nil {
+		return nil, errors.New("Директория " + config.Confd + " не существует.")
+	}
+
+	instance := &Instance{
+		logs:    logs,
+		config:  config,
+		metrics: nil,
+		router:  mux.NewRouter(),
+		pool:    newRedisPool(config.RedisServer+":"+config.RedisPort, config.RedisPassword),
+		role:    UNDEF,
+	}
+
+	return instance, nil
+}
+
+func getLogEntry(config *Config) *logrus.Entry {
 	logger := logrus.New()
 	logger.SetFormatter(&logrus.JSONFormatter{})
 
@@ -106,23 +84,30 @@ func NewInstance() *Instance {
 		})
 	}
 
-	// Проверяем наличие директории с конф файлами метрик
-	ret, err := exists(config.Confd)
-	if !ret || err != nil {
-		logs.Error("Директория " + config.Confd + " не существует.")
-		return nil
+	return logs
+}
+
+func getConfig() *Config {
+	// load values from .env into the system
+	if err := godotenv.Load("D:\\Projects\\go\\metrics-from-logs\\.env"); err != nil {
+		log.Print("No .env file found")
+	}
+	return &Config{
+		Confd:         getEnv("MFL_CONF_DIR", "etc\\mfl\\conf.d\\"),
+		Loglevel:      getEnv("MFL_LOG_LEVEL", "debug"),
+		Bindaddr:      getEnv("MFL_BIND_ADDR", "127.0.0.1:8080"),
+		Context:       getEnv("MFL_CONTEXT", "/"),
+		EsHost:        getEnv("MFL_ES_HOST", "127.0.0.1"),
+		EsPort:        getEnv("MFL_ES_PORT", "9200"),
+		EsUser:        getEnv("MFL_ES_USER", "user"),
+		EsPassword:    getEnv("MFL_ES_PASSWORD", "password"),
+		K8sPod:        getEnv("MFL_K8S_POD", ""),
+		K8sNamespace:  getEnv("MFL_K8S_NAMESPACE", ""),
+		RedisServer:   getEnv("MFL_REDIS_SERVER", "127.0.0.1"),
+		RedisPort:     getEnv("MFL_REDIS_PORT", "6379"),
+		RedisPassword: getEnv("MFL_REDIS_PASSWORD", ""),
 	}
 
-	instance := &Instance{
-		logs:    logs,
-		config:  config,
-		metrics: nil,
-		router:  mux.NewRouter(),
-		pool:    newRedisPool(config.RedisServer+":"+config.RedisPort, config.RedisPassword),
-		role:    UNDEF,
-	}
-
-	return instance
 }
 
 // exists returns whether the given file or directory exists

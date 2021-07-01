@@ -5,32 +5,35 @@ import (
 	"io/ioutil"
 	"path/filepath"
 
+	"github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v3"
 )
 
 // FillMetrics Заполняем структуру информацией о метриках
-func (i *Instance) FillMetrics() error {
+func FillMetrics(logs *logrus.Entry, config *Config) ([]Metric, error) {
 	// Получаем список файлов в директории.
-	files, _ := filepath.Glob(i.config.Confd + "*.yaml")
+	files, _ := filepath.Glob(config.Confd + "\\*.yaml")
+
+	var metrics []Metric
 
 	for _, fileName := range files {
 		confFile, err := ioutil.ReadFile(fileName)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		var metric Metric
 		err = yaml.Unmarshal(confFile, &metric)
 		if err != nil {
-			return err
+			return nil, err
 		}
-		if IsMetricExist(metric, i.metrics) {
-			i.logs.Error("Не уникальная реплика " + metric.Mertic + " в файле " + fileName + ". Пропускаем.")
+		if IsMetricExist(metric, metrics) {
+			logs.Warnf("Не уникальная метрика %s в файле %s. Пропускаем. ", metric.Mertic, fileName)
 			continue
 		}
-		i.metrics = append(i.metrics, metric)
+		metrics = append(metrics, metric)
 	}
 
-	return nil
+	return metrics, nil
 }
 
 // IsMetricExist проверяет, есть ли метрика с таким именем в массиве

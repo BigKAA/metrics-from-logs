@@ -2,71 +2,43 @@
 package instance
 
 import (
-	"os"
 	"strconv"
 	"testing"
 	"time"
 
 	"github.com/gomodule/redigo/redis"
-	"github.com/sirupsen/logrus"
 )
 
 func Test_updatePrometheusMetric(t *testing.T) {
+	config := getConfig()
 
-	prometheusLabels := [2]PrometheusLabels{
-		{
-			Name:  "test_name_1",
-			Value: "test_value_1",
-		},
-		{
-			Name:  "test_name_11",
-			Value: "test_value_11",
-		},
+	logs := getLogEntry(config)
+
+	i, err := getInstance(config, logs)
+	if err != nil {
+		logs.Error("f: getInstance - :", err)
 	}
+
+	metrics, err := FillMetrics(logs, config)
+	if err != nil || metrics == nil {
+		logs.Error("Неудалось сформировать массив метрик. ", err)
+		t.Error("Неудалось сформировать массив метрик. ", err)
+		t.Fail()
+		return
+	}
+	metric := metrics[0]
 
 	redisMetric := &RedisMetric{
-		Metric:     "test_metric_1",
-		Metrichelp: "help for metric",
-		Metrictype: "counter",
-		Query: "{ \"query\": { \"bool\": {  \"filter\": [ { " +
-			" \"range\": { \"@timestamp\": { " +
-			" \"gte\": \"{{.Gte}}\", " +
-			" \"lte\": \"{{.Lte}}\", " +
-			"\"format\": \"strict_date_optional_time\" " +
-			" } } }, { " +
-			"\"match_phrase\": {  \"status\": 200 } } ] } }",
-		Index:  "oasi-stage-app-nginx-access-*",
-		Repeat: "10",
-		Labels: prometheusLabels[0:1],
+		Metric:     metric.Mertic,
+		Metrichelp: metric.Mertichelp,
+		Metrictype: metric.Metrictype,
+		Query:      metric.Query,
+		Index:      metric.Index,
+		Repeat:     strconv.Itoa(metric.Repeat),
+		Labels:     metric.Labels,
 	}
 
-	logger := logrus.New()
-	logger.SetFormatter(&logrus.JSONFormatter{})
-	level, _ := logrus.ParseLevel("debug")
-	logger.SetLevel(level)
-	logs := logger.WithFields(logrus.Fields{
-		"pid": strconv.Itoa(os.Getpid()),
-	})
-
-	config := &Config{
-		Confd:         "etc\\mfl\\conf.d\\",
-		Loglevel:      "debug",
-		Bindaddr:      "127.0.0.1:8080",
-		Context:       "/",
-		EsHost:        "127.0.0.1",
-		EsPort:        "9200",
-		EsUser:        "user",
-		EsPassword:    "password",
-		K8sPod:        "",
-		K8sNamespace:  "",
-		RedisServer:   "127.0.0.1",
-		RedisPort:     "6379",
-		RedisPassword: "",
-	}
-
-	pool := newRedisPool(config.RedisServer+":"+config.RedisPort, config.RedisPassword)
-	//
-	err := updatePrometheusMetric(pool, logs, 5111, redisMetric)
+	err = updatePrometheusMetric(i.pool, i.logs, 5111, redisMetric)
 	if err != nil {
 		t.Error("ERROR updatePrometheusMetric: ", err)
 		t.Fail()
@@ -76,51 +48,28 @@ func Test_updatePrometheusMetric(t *testing.T) {
 }
 
 func Test_redisMagic(t *testing.T) {
-	// Подготовка
-	metric := &Metric{
-		Mertic:     "test_metric_1",
-		Mertichelp: "help for metric",
-		Query: "{ \"query\": { \"bool\": {  \"filter\": [ { " +
-			" \"range\": { \"@timestamp\": { " +
-			" \"gte\": \"{{.Gte}}\", " +
-			" \"lte\": \"{{.Lte}}\", " +
-			"\"format\": \"strict_date_optional_time\" " +
-			" } } }, { " +
-			"\"match_phrase\": {  \"status\": 200 } } ] } }",
-		Repeat:     15,
-		Metrictype: "counter",
-		Delay:      10,
+
+	config := getConfig()
+
+	logs := getLogEntry(config)
+
+	instance, err := getInstance(config, logs)
+	if err != nil {
+		logs.Error("f: getInstance - :", err)
 	}
 
-	// Переписать. Брать конфиг из .env или из env
-	config := &Config{
-		Confd:         "etc\\mfl\\conf.d\\",
-		Loglevel:      "debug",
-		Bindaddr:      "127.0.0.1:8080",
-		Context:       "/",
-		EsHost:        "127.0.0.1",
-		EsPort:        "9200",
-		EsUser:        "user",
-		EsPassword:    "password",
-		K8sPod:        "",
-		K8sNamespace:  "",
-		RedisServer:   "127.0.0.1",
-		RedisPort:     "6379",
-		RedisPassword: "",
+	metrics, err := FillMetrics(logs, config)
+	if err != nil || metrics == nil {
+		logs.Error("Неудалось сформировать массив метрик. ", err)
+		t.Error("Неудалось сформировать массив метрик. ", err)
+		t.Fail()
+		return
 	}
+	metric := &metrics[0]
 
-	logger := logrus.New()
-	logger.SetFormatter(&logrus.JSONFormatter{})
-	level, _ := logrus.ParseLevel("debug")
-	logger.SetLevel(level)
-	logs := logger.WithFields(logrus.Fields{
-		"pid": strconv.Itoa(os.Getpid()),
-	})
-
-	pool := newRedisPool(config.RedisServer+":"+config.RedisPort, config.RedisPassword)
-	connSub := pool.Get()
+	connSub := instance.pool.Get()
 	defer connSub.Close()
-	conn := pool.Get()
+	conn := instance.pool.Get()
 	defer conn.Close()
 
 	// записываем данные в редис
@@ -137,13 +86,13 @@ func Test_redisMagic(t *testing.T) {
 	}
 
 	// Читаем данные из редис
-	_, _, _, err := redisMagic(conn, logs)
+	rMetric, _, _, err := redisMagic(conn, logs)
 	if err != nil {
 		t.Fail()
 	} else {
+		logs.Debug("rMetricQuery: ", rMetric.Query)
 		t.Log("success")
 	}
-
 }
 
 func Test_parseQuery(t *testing.T) {
@@ -155,13 +104,9 @@ func Test_parseQuery(t *testing.T) {
 		" } } }, { " +
 		"\"match_phrase\": {  \"status\": 200 } } ] } }"
 
-	logger := logrus.New()
-	logger.SetFormatter(&logrus.JSONFormatter{})
-	level, _ := logrus.ParseLevel("debug")
-	logger.SetLevel(level)
-	logs := logger.WithFields(logrus.Fields{
-		"pid": strconv.Itoa(os.Getpid()),
-	})
+	config := getConfig()
+
+	logs := getLogEntry(config)
 
 	lte := time.Now()
 	gte := time.Now().Add(time.Duration(-20) * time.Second)
