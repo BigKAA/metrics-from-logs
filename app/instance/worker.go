@@ -50,7 +50,7 @@ func (i *Instance) envelopePocessRecievedMetric() {
 	// формируем метрику в redis
 	// с именем:  mfl_metric_prefix:название_метрики:count
 	// Время устаревания метрики: Metric.Repeat * 2
-	err = updatePrometheusMetric(i.pool, i.logs, count, &rMetric)
+	err = updatePrometheusMetric(i, count, &rMetric)
 	if err != nil {
 		i.logs.Error("f: es - error updateMetric: ", err)
 		return
@@ -60,8 +60,8 @@ func (i *Instance) envelopePocessRecievedMetric() {
 // updateMetric формируем () метрику в redis
 // с именем:  mfl_metric_prefix:название_метрики:count
 // Время устаревания метрики: Metric.Repeat * 2
-func updatePrometheusMetric(pool *redis.Pool, logs *logrus.Entry, count int64, rMetric *RedisMetric) error {
-	conn := pool.Get()
+func updatePrometheusMetric(i *Instance, count int64, rMetric *RedisMetric) error {
+	conn := i.pool.Get()
 	defer conn.Close()
 	// Формируем имя метрики
 	metric_key := mfl_metric_prefix + ":" + rMetric.Metric + ":count"
@@ -75,9 +75,17 @@ func updatePrometheusMetric(pool *redis.Pool, logs *logrus.Entry, count int64, r
 	}
 
 	// Получаем старое значение метрики
-	values, _ := redis.Values(conn.Do("HGETALL", metric_key))
-	if cap(values) != 0 {
-		redis.ScanStruct(values, &promMetric)
+	pmString, _ := redis.String(conn.Do("GET", metric_key))
+	// Если метрики нет было, то используем значение по умолчанию promMetric.
+	// Если была - то заполняем структуру promMetric тем, что было в Redis
+	if pmString != "" {
+		pmBytes := []byte(pmString)
+
+		err := json.Unmarshal(pmBytes, &promMetric)
+		if err != nil {
+			i.logs.Error("f: updatePrometheusMetric - json.Unmarshal error: ", err)
+			return err
+		}
 	}
 
 	// Добавляем новое значение к существующему.
@@ -85,20 +93,20 @@ func updatePrometheusMetric(pool *redis.Pool, logs *logrus.Entry, count int64, r
 
 	b, err := json.Marshal(&promMetric)
 	if err != nil {
-		logs.Error("f: updatePrometheusMetric - json.Marshal error: ", err)
+		i.logs.Error("f: updatePrometheusMetric - json.Marshal error: ", err)
 		return err
 	}
 
 	// Записываем метрику в Redis
 	_, err = conn.Do("SET", metric_key, string(b))
 	if err != nil {
-		logs.Error("f: updatePrometheusMetric - Redis SET error: ", err)
+		i.logs.Error("f: updatePrometheusMetric - Redis SET error: ", err)
 		return err
 	}
 
 	_, err = conn.Do("EXPIRE", metric_key, expire_prom_metric.Seconds())
 	if err != nil {
-		logs.Error("f: send - Redis EXPIRE error: ", err)
+		i.logs.Error("f: send - Redis EXPIRE error: ", err)
 		return err
 	}
 	return nil

@@ -38,7 +38,7 @@ func Test_updatePrometheusMetric(t *testing.T) {
 		Labels:     metric.Labels,
 	}
 
-	err = updatePrometheusMetric(i.pool, i.logs, 5111, redisMetric)
+	err = updatePrometheusMetric(i, 5111, redisMetric)
 	if err != nil {
 		t.Error("ERROR updatePrometheusMetric: ", err)
 		t.Fail()

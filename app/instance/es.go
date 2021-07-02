@@ -52,9 +52,11 @@ func executeEsCount(rMetric *RedisMetric, i *Instance) (int64, error) {
 
 	body, _ := ioutil.ReadAll(resp.Body)
 
-	if !strings.HasPrefix(resp.Status, "2") || !strings.HasPrefix(resp.Status, "3") {
-		i.logs.Error("f: executeEsCount - status: ", resp.Status)
-		return 0, errors.New("FUNCTION RETURN NOT 2xx OR 3xx STATUS")
+	if !strings.HasPrefix(resp.Status, "2") {
+		if !strings.HasPrefix(resp.Status, "3") {
+			i.logs.Error("f: executeEsCount - status: ", resp.Status)
+			return 0, errors.New("FUNCTION RETURN NOT 2xx OR 3xx STATUS")
+		}
 	}
 
 	i.logs.Debug("f: executeEsCount - body: ", string(body))
