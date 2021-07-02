@@ -46,7 +46,7 @@ func (i *Instance) envelopePocessRecievedMetric() {
 	rMetric, num, err := processQuery(conn, i.logs)
 	if num == 1 {
 		// это не ошибка. Пустая очередь.
-		i.logs.Debug("f: envelopePocessRecievedMetric - Emty query. ", err)
+		i.logs.Debug("f: envelopePocessRecievedMetric - Empty query. ", err)
 		return
 	}
 	if err != nil {

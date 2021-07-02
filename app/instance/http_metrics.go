@@ -59,7 +59,7 @@ func getMetricString(logs *logrus.Entry, metricKey string, conn redis.Conn) (str
 	var sb strings.Builder
 
 	sb.WriteString("# HELP " + pm.Metric + " " + pm.Help + "\n")
-	sb.WriteString("# Type " + pm.Metric + " " + pm.Type + "\n")
+	sb.WriteString("# TYPE " + pm.Metric + " " + pm.Type + "\n")
 
 	labels := makeLabelsString(&pm)
 	if labels != "" {
