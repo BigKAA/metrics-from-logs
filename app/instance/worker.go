@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"html/template"
+	"math/rand"
 	"strconv"
 	"time"
 
@@ -25,7 +26,10 @@ func (i *Instance) worker() {
 		switch v := psc.Receive().(type) {
 		case redis.Message:
 			i.logs.Debug("f: worker - Message: " + v.Channel + " " + string(v.Data))
-			// Для работы требуется новый коннект к Redis
+			// Небольшая рандомная задержка в пределах 2-х секунд
+			n := rand.Intn(2000)
+			time.Sleep(time.Duration(n) * time.Millisecond)
+
 			go i.envelopePocessRecievedMetric()
 		case error:
 			i.logs.Error("Error channel " + mfl_query)

@@ -2,6 +2,8 @@
 package instance
 
 import (
+	"bytes"
+	"encoding/json"
 	"io/ioutil"
 	"path/filepath"
 
@@ -21,6 +23,7 @@ func FillMetrics(logs *logrus.Entry, config *Config) ([]Metric, error) {
 		if err != nil {
 			return nil, err
 		}
+
 		var metric Metric
 		err = yaml.Unmarshal(confFile, &metric)
 		if err != nil {
@@ -30,6 +33,13 @@ func FillMetrics(logs *logrus.Entry, config *Config) ([]Metric, error) {
 			logs.Warnf("Не уникальная метрика %s в файле %s. Пропускаем. ", metric.Mertic, fileName)
 			continue
 		}
+		// Сожмем метрику. Удалим лишние пролбелы.
+		src := []byte(metric.Query)
+		dst := bytes.NewBuffer([]byte{})
+		if err = json.Compact(dst, src); err != nil {
+
+		}
+
 		metrics = append(metrics, metric)
 	}
 
