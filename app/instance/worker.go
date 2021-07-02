@@ -23,7 +23,7 @@ func (i *Instance) worker() {
 	for c.Err() == nil {
 		switch v := psc.Receive().(type) {
 		case redis.Message:
-			i.logs.Debug("Message: " + v.Channel + " " + string(v.Data))
+			i.logs.Debug("f: worker - Message: " + v.Channel + " " + string(v.Data))
 			// Для работы требуется новый коннект к Redis
 			go i.envelopePocessRecievedMetric()
 		case error:
@@ -44,6 +44,7 @@ func (i *Instance) envelopePocessRecievedMetric() {
 	count, err := i.es(&rMetric)
 	if err != nil {
 		i.logs.Error("f: envelopePocessRecievedMetric - ", err)
+		return
 	}
 
 	// формируем метрику в redis
@@ -203,16 +204,19 @@ func redisMagic(conn redis.Conn, logs *logrus.Entry) (RedisMetric, int64, int64,
 }
 
 // parseQuery Парсим шаблон запроса. Подставляем временные ограничения.
-// Возвращвем готовый запрос.
+// Возвращаем готовый запрос.
+// Входящее время в local timezone. Elasticsearch работсает с UTC
 func parseQuery(query string, logs *logrus.Entry, lte time.Time, gte time.Time) (string, error) {
 	type TimeLine struct {
 		Lte string
 		Gte string
 	}
 
+	utc, _ := time.LoadLocation("UTC")
+
 	timeLine := TimeLine{
-		Lte: lte.Format("2006:01:02T15:04:05Z"),
-		Gte: gte.Format("2006:01:02T15:04:05Z"),
+		Lte: lte.In(utc).Format("2006-01-02T15:04:05Z"),
+		Gte: gte.In(utc).Format("2006-01-02T15:04:05Z"),
 	}
 
 	templ, err := template.New("es").Parse(query)

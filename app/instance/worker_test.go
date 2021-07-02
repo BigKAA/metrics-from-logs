@@ -88,6 +88,7 @@ func Test_redisMagic(t *testing.T) {
 	// Читаем данные из редис
 	rMetric, _, _, err := redisMagic(conn, logs)
 	if err != nil {
+		t.Error(err)
 		t.Fail()
 	} else {
 		logs.Debug("rMetricQuery: ", rMetric.Query)

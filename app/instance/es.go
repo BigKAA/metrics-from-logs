@@ -3,26 +3,17 @@ package instance
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
-	"os"
+	"errors"
+	"io/ioutil"
+	"net/http"
 	"strings"
-
-	"github.com/elastic/go-elasticsearch/v7"
-	"github.com/elastic/go-elasticsearch/v7/estransport"
-	"github.com/sirupsen/logrus"
 )
 
 // es Запрос в es
 func (i *Instance) es(rMetric *RedisMetric) (int64, error) {
-	es, err := getEsClient(i)
-	if err != nil {
-		i.logs.Error("f: es - error getEsClient: ", err)
-		return 0, err
-	}
-
 	// получаем количество записей
-	count, err := executeEsCount(es, rMetric, i.logs)
+	count, err := executeEsCount(rMetric, i)
 	if err != nil {
 		i.logs.Error("f: es - error executeEsCount: ", err)
 		return 0, err
@@ -34,87 +25,59 @@ func (i *Instance) es(rMetric *RedisMetric) (int64, error) {
 
 // executeEsCount Выполнение запроса типа _count
 // Возвращает число, количество записей, удовлетворяющих запросы.
-func executeEsCount(es *elasticsearch.Client, rMetric *RedisMetric, logs *logrus.Entry) (int64, error) {
-
+func executeEsCount(rMetric *RedisMetric, i *Instance) (int64, error) {
 	bQuery := []byte(rMetric.Query)
 	isValid := json.Valid(bQuery)
 	if !isValid {
-		logs.Debug("constructQuery() ERROR: query string not valid:", rMetric.Query)
-	} else {
-		logs.Debug("constructQuery() valid JSON:", isValid)
+		errStr := "f: executeEsCount - ERROR: query string not valid: " + rMetric.Query
+		i.logs.Debug(errStr)
+		return 0, errors.New(errStr)
 	}
 
-	var b strings.Builder
-	b.WriteString(rMetric.Query)
-	read := strings.NewReader(b.String())
+	uri := i.config.EsHost + ":" + i.config.EsPort + "/" + rMetric.Index + "/_count"
 
-	var buf bytes.Buffer
+	req, _ := http.NewRequest("POST", uri, bytes.NewBuffer(bQuery))
+	req.Header.Set("Content-Type", "application/json")
+	req.SetBasicAuth(i.config.EsUser, i.config.EsPassword)
 
-	if err := json.NewEncoder(&buf).Encode(read); err != nil {
-		logs.Error("json.NewEncoder() ERROR:", err)
-	}
+	client := &http.Client{}
 
-	res, err := es.Count(
-		es.Count.WithContext(context.Background()),
-		es.Count.WithIndex(rMetric.Index),
-		es.Count.WithBody(&buf),
-	)
+	resp, err := client.Do(req)
 	if err != nil {
-		logs.Error("f: es - error search: ", err)
+		i.logs.Error("f: executeEsCount - json.NewEncoder() ERROR:", err)
 		return 0, err
 	}
-	defer res.Body.Close()
 
-	if res.IsError() {
-		var e map[string]interface{}
-		if err := json.NewDecoder(res.Body).Decode(&e); err != nil {
-			logs.Error("f: es - error parsing respons body: ", err)
-			return 0, err
-		} else {
-			// Print the response status and error information.
-			logs.Debugf("[%s] %s: %s",
-				res.Status(),
-				e["error"].(map[string]interface{})["type"],
-				e["error"].(map[string]interface{})["reason"],
-			)
-		}
+	defer resp.Body.Close()
+
+	body, _ := ioutil.ReadAll(resp.Body)
+
+	if !strings.HasPrefix(resp.Status, "2") || !strings.HasPrefix(resp.Status, "3") {
+		i.logs.Error("f: executeEsCount - status: ", resp.Status)
+		return 0, errors.New("FUNCTION RETURN NOT 2xx OR 3xx STATUS")
 	}
 
-	var r map[string]interface{}
-	if err := json.NewDecoder(res.Body).Decode(&r); err != nil {
-		logs.Errorf("f: es - error parsing the response body: %s", err)
-	}
-	// Print the response status, number of results, and request duration.
-	logs.Debugf(
-		"f: es - [%s] count %d ",
-		res.Status(),
-		int(r["count"].(float64)),
-	)
-	return int64(r["count"].(float64)), nil
-}
+	i.logs.Debug("f: executeEsCount - body: ", string(body))
 
-// getEsClient Получаем клиент elasticsearch с указанными конфигурационными
-// параметрами.
-func getEsClient(i *Instance) (*elasticsearch.Client, error) {
-	cfg := elasticsearch.Config{
-		Addresses: []string{
-			i.config.EsHost + ":" + i.config.EsPort,
-		},
-		Username: i.config.EsUser,
-		Password: i.config.EsPassword,
-		// Transport: &http.Transport{
-		// 	MaxIdleConnsPerHost:   10,
-		// 	ResponseHeaderTimeout: time.Millisecond,
-		// 	DialContext:           (&net.Dialer{Timeout: time.Nanosecond}).DialContext,
-		// },
-		Logger: &estransport.JSONLogger{Output: os.Stdout},
+	type RespCountShards struct {
+		Total      int64 `json:"total"`
+		Successful int64 `json:"successful"`
+		Skipped    int64 `json:"skipped:`
+		Failed     int64 `json:"failed:`
 	}
 
-	es, err := elasticsearch.NewClient(cfg)
+	type RespCount struct {
+		Count  int64           `json:"count"`
+		Shards RespCountShards `json:"_shards"`
+	}
+
+	rs := &RespCount{}
+	err = json.Unmarshal(body, &rs)
 	if err != nil {
-		i.logs.Error("f: getEsClient - error NewClient: ", err)
-		return nil, err
+		i.logs.Error("f: getMetricString - json.Unmarshal error: ", err)
+		return 0, err
 	}
+	i.logs.Debug("f: executeEsCount - count: ", rs.Count)
 
-	return es, nil
+	return rs.Count, nil
 }
