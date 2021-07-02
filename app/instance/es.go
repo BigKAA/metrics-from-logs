@@ -29,9 +29,8 @@ func executeEsCount(rMetric *RedisMetric, i *Instance) (int64, error) {
 	bQuery := []byte(rMetric.Query)
 	isValid := json.Valid(bQuery)
 	if !isValid {
-		errStr := "f: executeEsCount - ERROR: query string not valid: " + rMetric.Query
-		i.logs.Debug(errStr)
-		return 0, errors.New(errStr)
+		i.logs.Debug("f: executeEsCount - ERROR: query string not valid: " + rMetric.Query)
+		return 0, errors.New("ERROR: query string not valid: " + rMetric.Query)
 	}
 
 	uri := i.config.EsHost + ":" + i.config.EsPort + "/" + rMetric.Index + "/_count"

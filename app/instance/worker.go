@@ -4,6 +4,7 @@ package instance
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"html/template"
 	"strconv"
 	"time"
@@ -38,12 +39,26 @@ func (i *Instance) envelopePocessRecievedMetric() {
 	conn := i.pool.Get()
 	defer conn.Close()
 
-	rMetric, _ := processQuery(conn, i.logs)
+	rMetric, num, err := processQuery(conn, i.logs)
+	if num == 1 {
+		// это не ошибка. Пустая очередь.
+		i.logs.Debug("f: envelopePocessRecievedMetric - Emty query. ", err)
+		return
+	}
+	if err != nil {
+		i.logs.Error("f: envelopePocessRecievedMetric - processQuery error: ", err)
+		return
+	}
 
 	// Запрос в elasticsearch
 	count, err := i.es(&rMetric)
 	if err != nil {
-		i.logs.Error("f: envelopePocessRecievedMetric - ", err)
+		if err.Error() == "redisMagic empty query" {
+			// Это не ошибка
+			i.logs.Debug("f: envelopePocessRecievedMetric - ", err)
+		} else {
+			i.logs.Error("f: envelopePocessRecievedMetric - ", err)
+		}
 		return
 	}
 
@@ -113,12 +128,17 @@ func updatePrometheusMetric(i *Instance, count int64, rMetric *RedisMetric) erro
 }
 
 // processQuery Суммирующая функция обработки
-func processQuery(conn redis.Conn, logs *logrus.Entry) (RedisMetric, error) {
+func processQuery(conn redis.Conn, logs *logrus.Entry) (RedisMetric, int64, error) {
 
 	rMetric, lteUnix, gteUnix, err := redisMagic(conn, logs)
+	if lteUnix == 1 {
+		// это не  ошибка - это фича. Просто не было заданий в очереди.
+		logs.Debug("f: processQuery - redisMagic empty query: ", errors.New("redisMagic empty query"))
+		return RedisMetric{}, 1, err
+	}
 	if err != nil {
-		logs.Debug("f: processQuery - redisMagic error: ", err)
-		return RedisMetric{}, err
+		logs.Error("f: processQuery - redisMagic error: ", err)
+		return RedisMetric{}, 0, err
 	}
 
 	// Подготовка запроса.
@@ -126,14 +146,14 @@ func processQuery(conn redis.Conn, logs *logrus.Entry) (RedisMetric, error) {
 	query, err := parseQuery(rMetric.Query, logs, time.Unix(lteUnix, 0), time.Unix(gteUnix, 0))
 	if err != nil {
 		logs.Debug("f: processQuery - parseQueryError: ", err)
-		return RedisMetric{}, err
+		return RedisMetric{}, 0, err
 	}
 
 	logs.Debug("f: processQuery - parsed query: ", query)
 
 	rMetric.Query = query
 
-	return rMetric, nil
+	return rMetric, 0, nil
 }
 
 // redisMagic забираем из очереди в Redis метрику и делаем все необходимое для предварительной
@@ -144,14 +164,18 @@ func redisMagic(conn redis.Conn, logs *logrus.Entry) (RedisMetric, int64, int64,
 
 	metric_key, err := conn.Do("LPOP", mfl_list)
 	if err != nil {
-		logs.Error("f: redisMagic - Redis LPOP error: ", err)
+		logs.Error("f: redisMagic - Redis LPOP: ", err)
 		return RedisMetric{}, 0, 0, err
+	}
+	if metric_key == nil {
+		logs.Debug("f: redisMagic - empty query. ", err)
+		return RedisMetric{}, 1, 0, err
 	}
 
 	// Читаем метрику
 	mString, err := redis.String(conn.Do("GET", metric_key))
 	if err != nil {
-		logs.Error("f: redisMagic - Redis HGETALL error: ", err)
+		logs.Error("f: redisMagic - Redis GET error: ", err)
 		return RedisMetric{}, 0, 0, err
 	}
 	b := []byte(mString)
@@ -166,7 +190,7 @@ func redisMagic(conn redis.Conn, logs *logrus.Entry) (RedisMetric, int64, int64,
 	// Удаляем метрику
 	_, err = conn.Do("DEL", metric_key)
 	if err != nil {
-		logs.Error("f: redisMagic - Redis HGETALL error: ", err)
+		logs.Error("f: redisMagic - Redis DEL error: ", err)
 	}
 
 	// Временные метки выполнения запроса
