@@ -35,6 +35,8 @@ func executeEsCount(rMetric *RedisMetric, i *Instance) (int64, error) {
 
 	uri := i.Config.EsHost + ":" + i.Config.EsPort + "/" + rMetric.Index + "/_count"
 
+	i.Logs.Debug("f: executeEsCount - URI: ", uri)
+
 	req, _ := http.NewRequest("POST", uri, bytes.NewBuffer(bQuery))
 	req.Header.Set("Content-Type", "application/json")
 	req.SetBasicAuth(i.Config.EsUser, i.Config.EsPassword)

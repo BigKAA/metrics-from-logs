@@ -87,9 +87,9 @@ func GetLogEntry(config *Config) *logrus.Entry {
 
 func GetConfig() *Config {
 	return &Config{
-		Confd:         getEnv("MFL_CONF_DIR", "etc\\mfl\\conf.d\\"),
-		Loglevel:      getEnv("MFL_LOG_LEVEL", "debug"),
-		Bindaddr:      getEnv("MFL_BIND_ADDR", "127.0.0.1:8080"),
+		Confd:         getEnv("MFL_CONF_DIR", "/etc/mfl/conf.d/"),
+		Loglevel:      getEnv("MFL_LOG_LEVEL", "info"),
+		Bindaddr:      getEnv("MFL_BIND_ADDR", "0.0.0.0:8080"),
 		Context:       getEnv("MFL_CONTEXT", "/"),
 		EsHost:        getEnv("MFL_ES_HOST", "127.0.0.1"),
 		EsPort:        getEnv("MFL_ES_PORT", "9200"),

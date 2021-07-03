@@ -24,7 +24,7 @@ func (i *Instance) beMaster() error {
 	// Читаем метрики из конфигурационных файлов
 	mt, err := FillMetrics(i.Logs, i.Config)
 	if err != nil || mt == nil {
-		i.Logs.Error("Неудалось сформировать массив метрик. ", err)
+		i.Logs.Error("f: beMaster - Неудалось сформировать массив метрик. ", err)
 		// если не удалось прочитать конфигурационный файл - это критическая ошибка.
 		// можно выклюать программу.
 		return err
