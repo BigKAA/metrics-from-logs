@@ -10,13 +10,13 @@ import (
 )
 
 func Test_updatePrometheusMetric(t *testing.T) {
-	config := getConfig()
+	config := GetConfig()
 
-	logs := getLogEntry(config)
+	logs := GetLogEntry(config)
 
-	i, err := getInstance(config, logs)
+	i, err := GetInstance(config, logs)
 	if err != nil {
-		logs.Error("f: getInstance - :", err)
+		logs.Error("f: GetInstance - :", err)
 	}
 
 	metrics, err := FillMetrics(logs, config)
@@ -49,13 +49,13 @@ func Test_updatePrometheusMetric(t *testing.T) {
 
 func Test_redisMagic(t *testing.T) {
 
-	config := getConfig()
+	config := GetConfig()
 
-	logs := getLogEntry(config)
+	logs := GetLogEntry(config)
 
-	instance, err := getInstance(config, logs)
+	instance, err := GetInstance(config, logs)
 	if err != nil {
-		logs.Error("f: getInstance - :", err)
+		logs.Error("f: GetInstance - :", err)
 	}
 
 	metrics, err := FillMetrics(logs, config)
@@ -67,9 +67,9 @@ func Test_redisMagic(t *testing.T) {
 	}
 	metric := &metrics[0]
 
-	connSub := instance.pool.Get()
+	connSub := instance.Pool.Get()
 	defer connSub.Close()
-	conn := instance.pool.Get()
+	conn := instance.Pool.Get()
 	defer conn.Close()
 
 	// записываем данные в редис
@@ -105,9 +105,9 @@ func Test_parseQuery(t *testing.T) {
 		" } } }, { " +
 		"\"match_phrase\": {  \"status\": 200 } } ] } }"
 
-	config := getConfig()
+	config := GetConfig()
 
-	logs := getLogEntry(config)
+	logs := GetLogEntry(config)
 
 	lte := time.Now()
 	gte := time.Now().Add(time.Duration(-20) * time.Second)

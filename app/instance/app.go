@@ -33,7 +33,7 @@ func (i *Instance) Start() error {
 	<-abort
 
 	if err := srv.Shutdown(context.TODO()); err != nil {
-		i.logs.Error(err) // failure/timeout shutting down the server gracefully
+		i.Logs.Error(err) // failure/timeout shutting down the server gracefully
 	}
 
 	httpServerExitDone.Wait()
@@ -44,10 +44,10 @@ func (i *Instance) Start() error {
 // doHttp запус http сервера.
 func (i *Instance) doHttp(wg *sync.WaitGroup) *http.Server {
 	i.ConfigRouter()
-	i.logs.Info("Starting http server Listen on: http://", i.config.Bindaddr, i.config.Context)
+	i.Logs.Info("Starting http server Listen on: http://", i.Config.Bindaddr, i.Config.Context)
 
 	srv := &http.Server{
-		Addr:    i.config.Bindaddr,
+		Addr:    i.Config.Bindaddr,
 		Handler: i.logRequestHandler(i.router),
 	}
 
@@ -57,7 +57,7 @@ func (i *Instance) doHttp(wg *sync.WaitGroup) *http.Server {
 		// always returns error. ErrServerClosed on graceful close
 		if err := srv.ListenAndServe(); err != http.ErrServerClosed {
 			// unexpected error. port in use?
-			i.logs.Error("ListenAndServe(): ", err)
+			i.Logs.Error("ListenAndServe(): ", err)
 		}
 	}()
 
@@ -67,7 +67,7 @@ func (i *Instance) doHttp(wg *sync.WaitGroup) *http.Server {
 
 // ConfigRouter конфигурирует роутер
 func (i *Instance) ConfigRouter() {
-	h := i.router.PathPrefix(i.config.Context).Subrouter()
+	h := i.router.PathPrefix(i.Config.Context).Subrouter()
 	h.HandleFunc("/", i.HandlerRoot())
 	h.HandleFunc("/metrics/", i.HandlerMetrics())
 }
@@ -85,7 +85,7 @@ func (i *Instance) HandlerRoot() http.HandlerFunc {
 func (i *Instance) logRequestHandler(h http.Handler) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		m := httpsnoop.CaptureMetrics(h, w, r)
-		i.logs.WithFields(logrus.Fields{
+		i.Logs.WithFields(logrus.Fields{
 			"method":         r.Method,
 			"remote_address": r.RemoteAddr,
 			"request_uri":    r.RequestURI,
@@ -100,14 +100,14 @@ func (i *Instance) logRequestHandler(h http.Handler) http.HandlerFunc {
 // masterElection Выборы мастера
 func (i *Instance) masterElection(abort chan bool) {
 	for {
-		conn := i.pool.Get()
+		conn := i.Pool.Get()
 		defer conn.Close()
 
 		// id - значение в редисе для идентификации мастера. Присваивается masterKey
 		var id string
-		if i.config.K8sPod != "" {
+		if i.Config.K8sPod != "" {
 			// если работаем в кубере, то id содержит имя пода
-			id = i.config.K8sPod
+			id = i.Config.K8sPod
 		} else {
 			id = strconv.Itoa(os.Getpid()) // pid на разных машинах может совпадать...   <----- ????
 		}
@@ -115,14 +115,14 @@ func (i *Instance) masterElection(abort chan bool) {
 		// Пытаемся присвоить masterKey значение id данного приложения.
 		current, err := conn.Do("SET", masterKey, id, "NX", "PX", masterExpire)
 		if err != nil {
-			i.logs.Error("Redis connection error: ", err)
+			i.Logs.Error("Redis connection error: ", err)
 			return
 		}
 
-		if i.config.K8sPod != "" {
-			i.logs.Info("Выборы мастера - pod: ", id, " результат: ", current)
+		if i.Config.K8sPod != "" {
+			i.Logs.Info("Выборы мастера - pod: ", id, " результат: ", current)
 		} else {
-			i.logs.Info("Выборы мастера - pid: ", id, " результат: ", current)
+			i.Logs.Info("Выборы мастера - pid: ", id, " результат: ", current)
 		}
 
 		// Если значение присвоить удалось - то это мастер.
@@ -135,7 +135,7 @@ func (i *Instance) masterElection(abort chan bool) {
 				break
 			}
 		} else {
-			i.logs.Info("Start slave")
+			i.Logs.Info("Start slave")
 
 			i.role = SLAVE
 

@@ -52,11 +52,11 @@ type Config struct {
 
 // Instance ...
 type Instance struct {
-	logs    *logrus.Entry
-	config  *Config
-	metrics []Metric
+	Logs    *logrus.Entry
+	Config  *Config
+	Metrics []Metric
 	router  *mux.Router
-	pool    *redis.Pool
+	Pool    *redis.Pool
 	role    role
 }
 

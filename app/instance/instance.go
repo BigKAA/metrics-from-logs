@@ -5,14 +5,12 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"log"
 	"os"
 	"strconv"
 	"time"
 
 	"github.com/gomodule/redigo/redis"
 	"github.com/gorilla/mux"
-	"github.com/joho/godotenv"
 	"github.com/sirupsen/logrus"
 )
 
@@ -28,19 +26,19 @@ func NewInstance() *Instance {
 		return nil
 	}
 
-	config := getConfig()
+	config := GetConfig()
 
-	logs := getLogEntry(config)
+	logs := GetLogEntry(config)
 
-	instance, err := getInstance(config, logs)
+	instance, err := GetInstance(config, logs)
 	if err != nil {
-		logs.Error("f: getInstance - :", err)
+		logs.Error("f: GetInstance - :", err)
 	}
 
 	return instance
 }
 
-func getInstance(config *Config, logs *logrus.Entry) (*Instance, error) {
+func GetInstance(config *Config, logs *logrus.Entry) (*Instance, error) {
 	// Проверяем наличие директории с конф файлами метрик
 	ret, err := exists(config.Confd)
 	if !ret || err != nil {
@@ -48,18 +46,18 @@ func getInstance(config *Config, logs *logrus.Entry) (*Instance, error) {
 	}
 
 	instance := &Instance{
-		logs:    logs,
-		config:  config,
-		metrics: nil,
+		Logs:    logs,
+		Config:  config,
+		Metrics: nil,
 		router:  mux.NewRouter(),
-		pool:    newRedisPool(config.RedisServer+":"+config.RedisPort, config.RedisPassword),
+		Pool:    newRedisPool(config.RedisServer+":"+config.RedisPort, config.RedisPassword),
 		role:    UNDEF,
 	}
 
 	return instance, nil
 }
 
-func getLogEntry(config *Config) *logrus.Entry {
+func GetLogEntry(config *Config) *logrus.Entry {
 	logger := logrus.New()
 	logger.SetFormatter(&logrus.JSONFormatter{})
 
@@ -87,11 +85,7 @@ func getLogEntry(config *Config) *logrus.Entry {
 	return logs
 }
 
-func getConfig() *Config {
-	// load values from .env into the system
-	if err := godotenv.Load("D:\\Projects\\go\\metrics-from-logs\\.env"); err != nil {
-		log.Print("No .env file found")
-	}
+func GetConfig() *Config {
 	return &Config{
 		Confd:         getEnv("MFL_CONF_DIR", "etc\\mfl\\conf.d\\"),
 		Loglevel:      getEnv("MFL_LOG_LEVEL", "debug"),
@@ -107,7 +101,6 @@ func getConfig() *Config {
 		RedisPort:     getEnv("MFL_REDIS_PORT", "6379"),
 		RedisPassword: getEnv("MFL_REDIS_PASSWORD", ""),
 	}
-
 }
 
 // exists returns whether the given file or directory exists

@@ -15,9 +15,9 @@ import (
 // HandlerRoot Обработка запроса /
 func (i *Instance) HandlerMetrics() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		conn := i.pool.Get()
+		conn := i.Pool.Get()
 		defer conn.Close()
-		fmt.Fprint(w, createMetricsPage(i.logs, conn))
+		fmt.Fprint(w, createMetricsPage(i.Logs, conn))
 	}
 }
 
