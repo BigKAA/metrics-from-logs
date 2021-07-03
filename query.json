@@ -1,0 +1,22 @@
+{
+    "query": {
+        "bool": {
+            "filter": [
+                {
+                    "range": {
+                        "@timestamp": {
+                            "gte": "2021-06-24T15:18:54.235Z",
+                            "lte": "2021-06-24T15:33:54.235Z",
+                            "format": "strict_date_optional_time"
+                        }
+                    }
+                },
+                {
+                    "match_phrase": {
+                        "status": 200
+                    }
+                }
+            ]
+        }
+    }
+}
