@@ -38,7 +38,10 @@ func Test_updatePrometheusMetric(t *testing.T) {
 		Labels:     metric.Labels,
 	}
 
-	err = updatePrometheusMetric(i, 5111, redisMetric)
+	pm := GetPMFromRedisMetric(redisMetric)
+
+	metric_key := mfl_metric_prefix + ":" + redisMetric.Metric + ":count"
+	err = pm.UpdateInRedis(metric_key, 100, expire_prom_metric, i.Pool, i.Logs)
 	if err != nil {
 		t.Error("ERROR updatePrometheusMetric: ", err)
 		t.Fail()

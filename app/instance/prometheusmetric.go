@@ -1,43 +1,80 @@
 // cSpell:disable
-package prometheusmetric
+package instance
 
 import (
 	"encoding/json"
+	"strconv"
+	"strings"
 	"time"
 
-	"github.com/BigKAA/metrics-from-logs/app/instance"
 	"github.com/gomodule/redigo/redis"
 	"github.com/sirupsen/logrus"
 )
 
-type PrometheusLabels struct {
-	Name  string
-	Value string
+// GetPMStringFromRedis читает метрику из Redis и формирует строку в формате Prometheus
+func GetPMStringFromRedis(metricKey string,
+	conn redis.Conn, logs *logrus.Entry) (string, error) {
+	pm := PrometheusMetric{}
+	mString, _ := redis.String(conn.Do("GET", metricKey))
+	if mString != "" {
+		b := []byte(mString)
+		// Парсим json
+		err := json.Unmarshal(b, &pm)
+		if err != nil {
+			logs.Error("f: GetPMStringFromRedis - json.Unmarshal error: ", err)
+			return "", err
+		}
+	}
+	var sb strings.Builder
+
+	sb.WriteString("# HELP " + pm.Metric + " " + pm.Help + "\n")
+	sb.WriteString("# TYPE " + pm.Metric + " " + pm.Type + "\n")
+
+	labels := pm.makeLabelsString()
+	if labels != "" {
+		sb.WriteString(pm.Metric + labels + " " + strconv.FormatInt(pm.Count, 10))
+	} else {
+		sb.WriteString(pm.Metric + " " + strconv.FormatInt(pm.Count, 10))
+	}
+	// Если есть, добавляем timestamp
+	if pm.Timestamp != 0 {
+		sb.WriteString(" " + strconv.FormatInt(pm.Timestamp, 10))
+	}
+	sb.WriteString("\n")
+	return sb.String(), nil
 }
 
-// Структура в Redis для формировния метрики в формате Prometheus
-type PrometheusMetric struct {
-	Metric    string             `redis:"metric"`
-	Help      string             `redis:"help"`
-	Type      string             `redis:"type"`
-	Count     int64              `redis:"count"`
-	Timestamp int64              `redis:"timestamp"`
-	Labels    []PrometheusLabels `redis:"labels"`
+// makeLabelsString Формирует строку метрики.
+func (pm *PrometheusMetric) makeLabelsString() string {
+	ii := len(pm.Labels)
+	if ii == 0 {
+		return ""
+	}
+	var sb strings.Builder
+	sb.WriteString("{")
+
+	for _, label := range pm.Labels {
+		ii--
+		sb.WriteString(label.Name + "=\"" + label.Value + "\"")
+		if ii > 0 {
+			sb.WriteString(",")
+		}
+	}
+	sb.WriteString("}")
+	return sb.String()
 }
 
 // GetPMFromRedisMetric заполняет поля PrometheusMetric из RedisMetric
-func (pm *PrometheusMetric) GetPMFromRedisMetric(metric instance.RedisMetric) {
+func GetPMFromRedisMetric(metric *RedisMetric) PrometheusMetric {
+	pm := PrometheusMetric{}
 	pm.Metric = metric.Metric
 	pm.Help = metric.Metrichelp
 	pm.Type = metric.Metrictype
 	pm.Count = 0
 	pm.Timestamp = 0
-	for _, label := range metric.Labels {
-		pm.Labels = append(pm.Labels, PrometheusLabels{
-			label.Name,
-			label.Value,
-		})
-	}
+	pm.Labels = metric.Labels
+
+	return pm
 }
 
 // UpdateInRedis Обновляет, если надо - создаёт PrometheusMetric в Redis
@@ -55,7 +92,7 @@ func (pm *PrometheusMetric) UpdateInRedis(metric_key string, count int64,
 
 		err := json.Unmarshal(pmBytes, pm)
 		if err != nil {
-			logs.Error("f: updatePrometheusMetric - json.Unmarshal error: ", err)
+			logs.Error("f: UpdateInRedis - json.Unmarshal error: ", err)
 			return err
 		}
 	}
@@ -71,20 +108,20 @@ func (pm *PrometheusMetric) UpdateInRedis(metric_key string, count int64,
 
 	b, err := json.Marshal(pm)
 	if err != nil {
-		logs.Error("f: updatePrometheusMetric - json.Marshal error: ", err)
+		logs.Error("f: UpdateInRedis - json.Marshal error: ", err)
 		return err
 	}
 
 	// Записываем метрику в Redis
 	_, err = conn.Do("SET", metric_key, string(b))
 	if err != nil {
-		logs.Error("f: updatePrometheusMetric - Redis SET error: ", err)
+		logs.Error("f: UpdateInRedis - Redis SET error: ", err)
 		return err
 	}
 
 	_, err = conn.Do("EXPIRE", metric_key, expire_prom_metric.Seconds())
 	if err != nil {
-		logs.Error("f: send - Redis EXPIRE error: ", err)
+		logs.Error("f: UpdateInRedis - Redis EXPIRE error: ", err)
 		return err
 	}
 	return nil

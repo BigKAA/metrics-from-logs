@@ -2,10 +2,8 @@
 package instance
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
-	"strconv"
 	"strings"
 
 	"github.com/gomodule/redigo/redis"
@@ -33,61 +31,13 @@ func createMetricsPage(logs *logrus.Entry, conn redis.Conn) string {
 
 	// Получем по каждому ключу строку с метрикой в форматие Prometheus
 	for _, key := range keys {
-		retString, _ := getMetricString(logs, key, conn)
+		retString, _ := GetPMStringFromRedis(key, conn, logs)
 		// добавляем строку в итговый результат.
 		sb.WriteString(retString)
 	}
 
 	ret := sb.String()
 	return ret
-}
-
-//
-func getMetricString(logs *logrus.Entry, metricKey string, conn redis.Conn) (string, error) {
-	// получаем метрику
-	pm := PrometheusMetric{}
-	mString, _ := redis.String(conn.Do("GET", metricKey))
-	if mString != "" {
-		b := []byte(mString)
-		// Парсим json
-		err := json.Unmarshal(b, &pm)
-		if err != nil {
-			logs.Error("f: getMetricString - json.Unmarshal error: ", err)
-			return "", err
-		}
-	}
-	var sb strings.Builder
-
-	sb.WriteString("# HELP " + pm.Metric + " " + pm.Help + "\n")
-	sb.WriteString("# TYPE " + pm.Metric + " " + pm.Type + "\n")
-
-	labels := makeLabelsString(&pm)
-	if labels != "" {
-		sb.WriteString(pm.Metric + labels + " " + strconv.FormatInt(pm.Count, 10) + "\n")
-	} else {
-		sb.WriteString(pm.Metric + " " + strconv.FormatInt(pm.Count, 10) + "\n")
-	}
-	return sb.String(), nil
-}
-
-// makeLabelsString Формирует строку с labels, типа "{label="blah", label2="blah"}"
-func makeLabelsString(pm *PrometheusMetric) string {
-	ii := len(pm.Labels)
-	if ii == 0 {
-		return ""
-	}
-	var sb strings.Builder
-	sb.WriteString("{")
-
-	for _, label := range pm.Labels {
-		ii--
-		sb.WriteString(label.Name + "=\"" + label.Value + "\"")
-		if ii > 0 {
-			sb.WriteString(",")
-		}
-	}
-	sb.WriteString("}")
-	return sb.String()
 }
 
 // getMetricsFromRedis получаем список метрик из Redis

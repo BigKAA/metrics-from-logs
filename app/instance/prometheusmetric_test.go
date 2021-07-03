@@ -1,31 +1,33 @@
 // cSpell:disable
-package prometheusmetric
+package instance
 
 import (
-	"log"
 	"strconv"
 	"testing"
 	"time"
 
-	"github.com/BigKAA/metrics-from-logs/app/instance"
 	"github.com/joho/godotenv"
 )
 
 func Test_GetPMFromRedisMetric(t *testing.T) {
-	if err := godotenv.Load("D:\\Projects\\go\\metrics-from-logs\\.env"); err != nil {
-		log.Print("No .env file found")
+	if err := godotenv.Load("..\\..\\.env"); err != nil {
+		t.Error("No .env file found: ", err)
+		t.Fail()
+		return
 	}
 
-	config := instance.GetConfig()
+	config := GetConfig()
 
-	logs := instance.GetLogEntry(config)
+	config.Confd = "..\\..\\" + config.Confd
 
-	i, err := instance.GetInstance(config, logs)
+	logs := GetLogEntry(config)
+
+	i, err := GetInstance(config, logs)
 	if err != nil {
 		logs.Error("f: GetInstance - :", err)
 	}
 
-	metrics, err := instance.FillMetrics(logs, config)
+	metrics, err := FillMetrics(logs, config)
 	if err != nil || metrics == nil {
 		logs.Error("Неудалось сформировать массив метрик. ", err)
 		t.Error("Неудалось сформировать массив метрик. ", err)
@@ -34,7 +36,7 @@ func Test_GetPMFromRedisMetric(t *testing.T) {
 	}
 	metric := metrics[0]
 
-	redisMetric := instance.RedisMetric{
+	redisMetric := RedisMetric{
 		Metric:     metric.Mertic,
 		Metrichelp: metric.Mertichelp,
 		Metrictype: metric.Metrictype,
@@ -45,12 +47,9 @@ func Test_GetPMFromRedisMetric(t *testing.T) {
 	}
 
 	metric_key := "mfl_test" + ":" + redisMetric.Metric + ":count"
-	pm := PrometheusMetric{}
+	pm := GetPMFromRedisMetric(&redisMetric)
 
-	pm.GetPMFromRedisMetric(redisMetric)
-
-	err = pm.UpdateInRedis(metric_key, 100, time.Duration(600), // 10 минут
-		i.Pool, i.Logs)
+	err = pm.UpdateInRedis(metric_key, 100, time.Duration(10)*time.Minute, i.Pool, i.Logs)
 	if err != nil {
 		t.Error("ERROR updatePrometheusMetric: ", err)
 		t.Fail()

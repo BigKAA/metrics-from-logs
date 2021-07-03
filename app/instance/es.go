@@ -63,8 +63,8 @@ func executeEsCount(rMetric *RedisMetric, i *Instance) (int64, error) {
 	type RespCountShards struct {
 		Total      int64 `json:"total"`
 		Successful int64 `json:"successful"`
-		Skipped    int64 `json:"skipped:`
-		Failed     int64 `json:"failed:`
+		Skipped    int64 `json:"skipped:"`
+		Failed     int64 `json:"failed:"`
 	}
 
 	type RespCount struct {
@@ -75,7 +75,7 @@ func executeEsCount(rMetric *RedisMetric, i *Instance) (int64, error) {
 	rs := &RespCount{}
 	err = json.Unmarshal(body, &rs)
 	if err != nil {
-		i.Logs.Error("f: getMetricString - json.Unmarshal error: ", err)
+		i.Logs.Error("f: executeEsCount - json.Unmarshal error: ", err)
 		return 0, err
 	}
 	i.Logs.Debug("f: executeEsCount - count: ", rs.Count)

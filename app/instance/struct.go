@@ -75,13 +75,14 @@ type PrometheusLabels struct {
 	Value string
 }
 
-// Формат hash метрики в redis
+// Структура в Redis для формировния метрики в формате Prometheus
 type PrometheusMetric struct {
-	Metric string             `redis:"metric"`
-	Help   string             `redis:"help"`
-	Type   string             `redis:"type"`
-	Count  int64              `redis:"count"`
-	Labels []PrometheusLabels `redis:"labels"`
+	Metric    string             `redis:"metric"`
+	Help      string             `redis:"help"`
+	Type      string             `redis:"type"`
+	Count     int64              `redis:"count"`
+	Timestamp int64              `redis:"timestamp"`
+	Labels    []PrometheusLabels `redis:"labels"`
 }
 
 const (
