@@ -2,7 +2,6 @@
 package instance
 
 import (
-	"strconv"
 	"testing"
 	"time"
 
@@ -36,15 +35,7 @@ func Test_GetPMFromRedisMetric(t *testing.T) {
 	}
 	metric := metrics[0]
 
-	redisMetric := RedisMetric{
-		Metric:     metric.Mertic,
-		Metrichelp: metric.Mertichelp,
-		Metrictype: metric.Metrictype,
-		Query:      metric.Query,
-		Index:      metric.Index,
-		Repeat:     strconv.Itoa(metric.Repeat),
-		Labels:     metric.Labels,
-	}
+	redisMetric := GetRedisMetricFromMetric(&metric)
 
 	metric_key := "mfl_test" + ":" + redisMetric.Metric + ":count"
 	pm := GetPMFromRedisMetric(&redisMetric)

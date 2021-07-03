@@ -119,15 +119,7 @@ func send(conn redis.Conn, logs *logrus.Entry, metric *Metric) error {
 
 	ti := time.Now().Add(time.Duration(metric.Delay)).Unix()
 	key := mfl_metric_prefix + ":" + metric.Mertic + ":" + strconv.Itoa(int(ti))
-	redisMetric := RedisMetric{
-		Metric:     metric.Mertic,
-		Metrichelp: metric.Mertichelp,
-		Metrictype: metric.Metrictype,
-		Query:      metric.Query,
-		Index:      metric.Index,
-		Repeat:     strconv.Itoa(metric.Repeat),
-		Labels:     metric.Labels,
-	}
+	redisMetric := GetRedisMetricFromMetric(metric)
 
 	logs.Debug("f: send - Metric: " + metric.Mertic + ", key: " + key)
 
