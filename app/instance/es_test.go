@@ -16,13 +16,13 @@ func Test_executeEsCount(t *testing.T) {
 		return
 	}
 
-	config := getConfig()
+	config := GetConfig()
 
-	logs := getLogEntry(config)
+	logs := GetLogEntry(config)
 
-	instance, err := getInstance(config, logs)
+	instance, err := GetInstance(config, logs)
 	if err != nil {
-		logs.Error("f: getInstance - :", err)
+		logs.Error("f: GetInstance - :", err)
 		t.Error(err)
 		t.Fail()
 		return

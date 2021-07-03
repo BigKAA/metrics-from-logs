@@ -20,3 +20,4 @@ etc/
 METRICS.md
 .env
 *.http
+k8s/00-deployment.yaml

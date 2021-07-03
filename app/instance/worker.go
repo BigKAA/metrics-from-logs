@@ -17,7 +17,7 @@ import (
 // worker Основной процесс обработки метрик.
 // Подписывается на канал в Redis.
 func (i *Instance) worker() {
-	c := i.pool.Get()
+	c := i.Pool.Get()
 	defer c.Close()
 	psc := redis.PubSubConn{c}
 	psc.Subscribe(mfl_query)
@@ -25,14 +25,14 @@ func (i *Instance) worker() {
 	for c.Err() == nil {
 		switch v := psc.Receive().(type) {
 		case redis.Message:
-			i.logs.Debug("f: worker - Message: " + v.Channel + " " + string(v.Data))
+			i.Logs.Debug("f: worker - Message: " + v.Channel + " " + string(v.Data))
 			// Небольшая рандомная задержка в пределах 2-х секунд
 			n := rand.Intn(2000)
 			time.Sleep(time.Duration(n) * time.Millisecond)
 
 			go i.envelopePocessRecievedMetric()
 		case error:
-			i.logs.Error("Error channel " + mfl_query)
+			i.Logs.Error("Error channel " + mfl_query)
 		}
 	}
 }
@@ -40,17 +40,17 @@ func (i *Instance) worker() {
 // processRecievedMetric Забирает метрику из очереди.
 // Выполняет запрос к elasticsearch.
 func (i *Instance) envelopePocessRecievedMetric() {
-	conn := i.pool.Get()
+	conn := i.Pool.Get()
 	defer conn.Close()
 
-	rMetric, num, err := processQuery(conn, i.logs)
+	rMetric, num, err := processQuery(conn, i.Logs)
 	if num == 1 {
 		// это не ошибка. Пустая очередь.
-		i.logs.Debug("f: envelopePocessRecievedMetric - Empty query. ", err)
+		i.Logs.Debug("f: envelopePocessRecievedMetric - Empty query. ", err)
 		return
 	}
 	if err != nil {
-		i.logs.Error("f: envelopePocessRecievedMetric - processQuery error: ", err)
+		i.Logs.Error("f: envelopePocessRecievedMetric - processQuery error: ", err)
 		return
 	}
 
@@ -59,76 +59,23 @@ func (i *Instance) envelopePocessRecievedMetric() {
 	if err != nil {
 		if err.Error() == "redisMagic empty query" {
 			// Это не ошибка
-			i.logs.Debug("f: envelopePocessRecievedMetric - ", err)
+			i.Logs.Debug("f: envelopePocessRecievedMetric - ", err)
 		} else {
-			i.logs.Error("f: envelopePocessRecievedMetric - ", err)
+			i.Logs.Error("f: envelopePocessRecievedMetric - ", err)
 		}
 		return
 	}
 
 	// формируем метрику в redis
 	// с именем:  mfl_metric_prefix:название_метрики:count
-	// Время устаревания метрики: Metric.Repeat * 2
-	err = updatePrometheusMetric(i, count, &rMetric)
+	pm := GetPMFromRedisMetric(&rMetric)
+
+	metric_key := mfl_metric_prefix + ":" + rMetric.Metric + ":count"
+	err = pm.UpdateInRedis(metric_key, count, expire_prom_metric, i.Pool, i.Logs)
 	if err != nil {
-		i.logs.Error("f: es - error updateMetric: ", err)
+		i.Logs.Error("f: es - error updateMetric: ", err)
 		return
 	}
-}
-
-// updateMetric формируем () метрику в redis
-// с именем:  mfl_metric_prefix:название_метрики:count
-// Время устаревания метрики: Metric.Repeat * 2
-func updatePrometheusMetric(i *Instance, count int64, rMetric *RedisMetric) error {
-	conn := i.pool.Get()
-	defer conn.Close()
-	// Формируем имя метрики
-	metric_key := mfl_metric_prefix + ":" + rMetric.Metric + ":count"
-
-	promMetric := PrometheusMetric{
-		Metric: rMetric.Metric,
-		Labels: rMetric.Labels,
-		Type:   rMetric.Metrictype,
-		Help:   rMetric.Metrichelp,
-		Count:  0,
-	}
-
-	// Получаем старое значение метрики
-	pmString, _ := redis.String(conn.Do("GET", metric_key))
-	// Если метрики нет было, то используем значение по умолчанию promMetric.
-	// Если была - то заполняем структуру promMetric тем, что было в Redis
-	if pmString != "" {
-		pmBytes := []byte(pmString)
-
-		err := json.Unmarshal(pmBytes, &promMetric)
-		if err != nil {
-			i.logs.Error("f: updatePrometheusMetric - json.Unmarshal error: ", err)
-			return err
-		}
-	}
-
-	// Добавляем новое значение к существующему.
-	promMetric.Count += count
-
-	b, err := json.Marshal(&promMetric)
-	if err != nil {
-		i.logs.Error("f: updatePrometheusMetric - json.Marshal error: ", err)
-		return err
-	}
-
-	// Записываем метрику в Redis
-	_, err = conn.Do("SET", metric_key, string(b))
-	if err != nil {
-		i.logs.Error("f: updatePrometheusMetric - Redis SET error: ", err)
-		return err
-	}
-
-	_, err = conn.Do("EXPIRE", metric_key, expire_prom_metric.Seconds())
-	if err != nil {
-		i.logs.Error("f: send - Redis EXPIRE error: ", err)
-		return err
-	}
-	return nil
 }
 
 // processQuery Суммирующая функция обработки

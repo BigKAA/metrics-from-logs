@@ -2,7 +2,6 @@
 package instance
 
 import (
-	"strconv"
 	"testing"
 	"time"
 
@@ -10,13 +9,13 @@ import (
 )
 
 func Test_updatePrometheusMetric(t *testing.T) {
-	config := getConfig()
+	config := GetConfig()
 
-	logs := getLogEntry(config)
+	logs := GetLogEntry(config)
 
-	i, err := getInstance(config, logs)
+	i, err := GetInstance(config, logs)
 	if err != nil {
-		logs.Error("f: getInstance - :", err)
+		logs.Error("f: GetInstance - :", err)
 	}
 
 	metrics, err := FillMetrics(logs, config)
@@ -28,17 +27,12 @@ func Test_updatePrometheusMetric(t *testing.T) {
 	}
 	metric := metrics[0]
 
-	redisMetric := &RedisMetric{
-		Metric:     metric.Mertic,
-		Metrichelp: metric.Mertichelp,
-		Metrictype: metric.Metrictype,
-		Query:      metric.Query,
-		Index:      metric.Index,
-		Repeat:     strconv.Itoa(metric.Repeat),
-		Labels:     metric.Labels,
-	}
+	redisMetric := GetRedisMetricFromMetric(&metric)
 
-	err = updatePrometheusMetric(i, 5111, redisMetric)
+	pm := GetPMFromRedisMetric(&redisMetric)
+
+	metric_key := mfl_metric_prefix + ":" + redisMetric.Metric + ":count"
+	err = pm.UpdateInRedis(metric_key, 100, expire_prom_metric, i.Pool, i.Logs)
 	if err != nil {
 		t.Error("ERROR updatePrometheusMetric: ", err)
 		t.Fail()
@@ -49,13 +43,13 @@ func Test_updatePrometheusMetric(t *testing.T) {
 
 func Test_redisMagic(t *testing.T) {
 
-	config := getConfig()
+	config := GetConfig()
 
-	logs := getLogEntry(config)
+	logs := GetLogEntry(config)
 
-	instance, err := getInstance(config, logs)
+	instance, err := GetInstance(config, logs)
 	if err != nil {
-		logs.Error("f: getInstance - :", err)
+		logs.Error("f: GetInstance - :", err)
 	}
 
 	metrics, err := FillMetrics(logs, config)
@@ -67,9 +61,9 @@ func Test_redisMagic(t *testing.T) {
 	}
 	metric := &metrics[0]
 
-	connSub := instance.pool.Get()
+	connSub := instance.Pool.Get()
 	defer connSub.Close()
-	conn := instance.pool.Get()
+	conn := instance.Pool.Get()
 	defer conn.Close()
 
 	// записываем данные в редис
@@ -105,9 +99,9 @@ func Test_parseQuery(t *testing.T) {
 		" } } }, { " +
 		"\"match_phrase\": {  \"status\": 200 } } ] } }"
 
-	config := getConfig()
+	config := GetConfig()
 
-	logs := getLogEntry(config)
+	logs := GetLogEntry(config)
 
 	lte := time.Now()
 	gte := time.Now().Add(time.Duration(-20) * time.Second)

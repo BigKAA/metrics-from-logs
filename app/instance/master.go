@@ -17,23 +17,23 @@ func (i *Instance) beMaster() error {
 		return nil
 	}
 
-	i.logs.Info("start master")
+	i.Logs.Info("start master")
 
 	i.role = MASTER
 
 	// Читаем метрики из конфигурационных файлов
-	mt, err := FillMetrics(i.logs, i.config)
+	mt, err := FillMetrics(i.Logs, i.Config)
 	if err != nil || mt == nil {
-		i.logs.Error("Неудалось сформировать массив метрик. ", err)
+		i.Logs.Error("f: beMaster - Неудалось сформировать массив метрик. ", err)
 		// если не удалось прочитать конфигурационный файл - это критическая ошибка.
 		// можно выклюать программу.
 		return err
 	}
-	i.metrics = mt
+	i.Metrics = mt
 
-	if i.config.Loglevel == "debug" {
-		for _, m := range i.metrics {
-			i.logs.Debug("{ Метрика: " + m.Mertic + ", запрос: " + m.Query + ", периодичность: " + strconv.Itoa(m.Repeat) + "}")
+	if i.Config.Loglevel == "debug" {
+		for _, m := range i.Metrics {
+			i.Logs.Debug("{ Метрика: " + m.Mertic + ", запрос: " + m.Query + ", периодичность: " + strconv.Itoa(m.Repeat) + "}")
 		}
 	}
 
@@ -56,11 +56,11 @@ func (i *Instance) beMaster() error {
 
 // expireMaster Пытаемся остаться мастером :) Обновляем, если это возможно, мастер ключ.
 func (i *Instance) expireMaster() bool {
-	conn := i.pool.Get()
+	conn := i.Pool.Get()
 	defer conn.Close()
 
 	if _, err := conn.Do("PEXPIRE", masterKey, masterExpire); err != nil {
-		i.logs.Info("master expare")
+		i.Logs.Info("master expare")
 		return true
 	}
 	return false
@@ -68,16 +68,16 @@ func (i *Instance) expireMaster() bool {
 
 func (i *Instance) doMaster(abort <-chan bool) {
 	// time.Sleep(4000000000)
-	// i.logs.Debug("doMaster - TIK")
+	// i.Logs.Debug("doMaster - TIK")
 	var err error = nil
 
-	for _, metric := range i.metrics {
-		i.logs.Debug("Start metric: " + metric.Mertic)
+	for _, metric := range i.Metrics {
+		i.Logs.Debug("Start metric: " + metric.Mertic)
 		if metric.Metrictype == "counter" {
 			go i.ProcessCounter(metric, abort)
 		} else {
 			err = errors.New("Метрика: " + metric.Mertic + ", тип: " + metric.Metrictype + " не поддерживается.")
-			i.logs.Error(err)
+			i.Logs.Error(err)
 		}
 	}
 }
@@ -108,10 +108,10 @@ func (i *Instance) ProcessCounter(metric Metric, abort <-chan bool) {
 }
 
 func (i *Instance) envelopeSend(metric *Metric) error {
-	conn := i.pool.Get()
+	conn := i.Pool.Get()
 	defer conn.Close()
 
-	return send(conn, i.logs, metric)
+	return send(conn, i.Logs, metric)
 }
 
 // send Ставит в очередь на выполнение метрики. Посылает уведомление о постановке в канал.
@@ -119,15 +119,7 @@ func send(conn redis.Conn, logs *logrus.Entry, metric *Metric) error {
 
 	ti := time.Now().Add(time.Duration(metric.Delay)).Unix()
 	key := mfl_metric_prefix + ":" + metric.Mertic + ":" + strconv.Itoa(int(ti))
-	redisMetric := RedisMetric{
-		Metric:     metric.Mertic,
-		Metrichelp: metric.Mertichelp,
-		Metrictype: metric.Metrictype,
-		Query:      metric.Query,
-		Index:      metric.Index,
-		Repeat:     strconv.Itoa(metric.Repeat),
-		Labels:     metric.Labels,
-	}
+	redisMetric := GetRedisMetricFromMetric(metric)
 
 	logs.Debug("f: send - Metric: " + metric.Mertic + ", key: " + key)
 

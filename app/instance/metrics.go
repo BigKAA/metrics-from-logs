@@ -14,7 +14,7 @@ import (
 // FillMetrics Заполняем структуру информацией о метриках
 func FillMetrics(logs *logrus.Entry, config *Config) ([]Metric, error) {
 	// Получаем список файлов в директории.
-	files, _ := filepath.Glob(config.Confd + "\\*.yaml")
+	files, _ := filepath.Glob(config.Confd + "*.yaml")
 
 	var metrics []Metric
 

@@ -3,7 +3,7 @@ ENV CGO_ENABLED 0
 ENV COOS linux
 ADD . /go/src/mfl
 WORKDIR /go/src/mfl
-RUN go build cmd/main/main.go
+RUN go build main.go
 
 # Final stage
 FROM alpine:3.13
