@@ -1,0 +1,79 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+    name: metrics
+    namespace: "mfl"
+    labels:
+        app: mfl
+        version: "0.3"
+data:
+    test1.yaml: |
+        ---
+        metric: test_metric_status_200
+        metrichelp: "Тестовая метрика status 200, счётчик"
+        metrictype: counter
+        query: |
+            {
+                "query": {
+                    "bool": {
+                        "filter": [
+                            {
+                                "range": {
+                                    "@timestamp": {
+                                        "gte": "{{.Gte}}",
+                                        "lte": "{{.Lte}}",
+                                        "format": "strict_date_optional_time"
+                                    }
+                                }
+                            },
+                            {
+                                "match_phrase": {
+                                    "status": 200
+                                }
+                            }
+                        ]
+                    }
+                }
+            }
+        labels:
+            - name: "status"
+              value: "200"
+        index: "index-*"
+        repeat: 5
+        delay: 4
+
+    test2.yaml: |
+        ---
+        metric: test_metric_status_400
+        metrichelp: "Тестовая метрика status 400, счётчик"
+        metrictype: counter
+        query: |
+            {
+                "query": {
+                    "bool": {
+                        "filter": [
+                            {
+                                "range": {
+                                    "@timestamp": {
+                                        "gte": "{{.Gte}}",
+                                        "lte": "{{.Lte}}",
+                                        "format": "strict_date_optional_time"
+                                    }
+                                }
+                            },
+                            {
+                                "match_phrase": {
+                                    "status": 400
+                                }
+                            }
+                        ]
+                    }
+                }
+            }
+        labels:
+            - name: "status"
+              value: "400"
+        index: "index-*"
+        repeat: 10
+        delay: 30
