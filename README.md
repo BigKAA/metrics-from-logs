@@ -93,7 +93,7 @@ delay: 4 # Задержка в секундах, перед первым зап�
 
 Все, что нужно для сборки уже есть в Dockerfile
 
-    docker build -t mfl:v0.3 "."
+    docker build -t bigkaa/mfl:v0.3.2 "."
 
 # Запуск приложения
 
@@ -102,11 +102,11 @@ delay: 4 # Задержка в секундах, перед первым зап�
 
 В Windows:
 
-    docker run -it --rm --name mfl --env-file .env -p 8080:8080 -v C:\Users\artur\metrics-from-logs\etc\mfl\conf.d:/etc/mfl/conf.d mfl:v0.3
+    docker run -it --rm --name mfl --env-file .env -p 8080:8080 -v C:\path-to\metrics-from-logs\etc\mfl\conf.d:/etc/mfl/conf.d bigkaa/mfl:v0.3.2
     curl http://host.docker.internal:8080
 
 ## Linux
-    docker run -it --rm --name mfl --env-file .env -p 8080:8080 -v etc/mfl/conf.d:/etc/mfl/conf.d mfl:v0.3
+    docker run -it --rm --name mfl --env-file .env -p 8080:8080 -v etc/mfl/conf.d:/etc/mfl/conf.d bigkaa/mfl:v0.3.2
     curl http://localhost:8080
 
 ## Kubernetes
