@@ -1,6 +1,8 @@
 # MFL (metrics-from-logs) 
 Получении метрик в формате Prometheus на основании информации из elasticsearch.
 
+**Уже не нужно** :) Аналогичный функционал уже встроен во [flunetbit](https://docs.fluentbit.io/manual/pipeline/filters/log_to_metrics).
+
 Фишки:
 * Позволяет горизонтальное масштабирование.
 * Требуется наличие Redis
